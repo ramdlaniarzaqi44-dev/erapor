@@ -1027,6 +1027,11 @@
                                             <button onClick={()=>handleMenuClick('cetak')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='cetak' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="printer"/> Cetak Rapor Sisipan</button>
                                         </>
                                     )}
+                                    
+                                    <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">E-Rapor Nasional</div>
+                                    <a href="https://erapor2.smasalmultazam-mojokerto.my.id/" target="_blank" rel="noopener noreferrer" className="w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 text-blue-400 font-medium">
+                                        <Icon name="external-link"/> E-Rapor Kemendikdasmen
+                                    </a>
                                 </>
                             )}
                             {(user?.role === 'admin' || isKepsek || isWakaAkademik) && (
