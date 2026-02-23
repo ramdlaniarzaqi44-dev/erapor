@@ -398,10 +398,10 @@
         };
 
         const DataAkun = ({ data, setData, notify }) => { 
-            const guruUsers = data.users.filter(u => u.role === 'guru');
+            const guruUsers = (data.users || []).filter(u => u.role === 'guru');
             const generateAccounts = () => {
-                const newUsers = [...data.users]; let count = 0;
-                data.guru.forEach(g => {
+                const newUsers = [...(data.users || [])]; let count = 0;
+                (data.guru || []).forEach(g => {
                     const cleanUsername = g.nama.split(',')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                     if (!newUsers.some(u => u.username === cleanUsername)) { newUsers.push({ id: `usr-g-${g.id}`, username: cleanUsername, password: '123', role: 'guru', nama: g.nama, nip: g.nip }); count++; }
                 });
@@ -409,7 +409,7 @@
             };
             const deleteAccount = (id, username) => {
                 if(username === 'admin') return notify('Akun Admin Utama tidak boleh dihapus!', 'error');
-                if(confirm(`Yakin ingin menghapus akun ${username}?`)) { setData(prev => ({ ...prev, users: prev.users.filter(u => u.id !== id) })); notify('Akun berhasil dihapus.', 'success'); }
+                if(confirm(`Yakin ingin menghapus akun ${username}?`)) { setData(prev => ({ ...prev, users: (prev.users || []).filter(u => String(u.id) !== String(id)) })); notify('Akun berhasil dihapus.', 'success'); }
             };
             return (
                 <div className="space-y-6 animate-fade">
@@ -420,10 +420,10 @@
         };
 
         const LogoSetting = ({ data, setData, notify }) => { 
-            const [localData, setLocalData] = useState(data.logo); const [walasFilter, setWalasFilter] = useState('');
-            useEffect(() => { setLocalData(data.logo); }, [data.logo]);
+            const [localData, setLocalData] = useState(data.logo || {}); const [walasFilter, setWalasFilter] = useState('');
+            useEffect(() => { setLocalData(data.logo || {}); }, [data.logo]);
             const handleSave = () => { setData(prev => ({...prev, logo: localData})); notify('Konfigurasi Disimpan', 'success'); };
-            const classesToEdit = data.kelas.filter(c => !walasFilter || c.nama === walasFilter);
+            const classesToEdit = (data.kelas || []).filter(c => !walasFilter || c.nama === walasFilter);
             const handleWalasChange = (className, name) => { setLocalData(prev => ({ ...prev, wali_kelas_per_kelas: { ...(prev.wali_kelas_per_kelas || {}), [className]: name } })); };
             return (
                 <div className="space-y-6 animate-fade">
@@ -433,15 +433,15 @@
                             <h3 className="font-bold text-lg mb-4 text-slate-700 border-b pb-2">Pengaturan Umum</h3>
                             <div className="grid grid-cols-1 gap-4"><FormInput label="Kota" value={localData.kota} onChange={v=>setLocalData(p=>({...p, kota:v}))}/><FormInput label="Tanggal Rapor" value={localData.tgl_rapor} onChange={v=>setLocalData(p=>({...p, tgl_rapor:v}))}/><div><label className="block text-sm font-medium text-slate-700 mb-2">Logo Sekolah (URL Gambar)</label><div className="flex items-start gap-4"><div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center overflow-hidden bg-slate-50 relative shrink-0">{localData.image ? (<img src={localData.image} className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />) : <span className="text-xs text-slate-400">No Logo</span>}</div><div className="flex-1"><input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm mb-2" placeholder="https://example.com/logo.png" value={localData.image || ''} onChange={(e) => setLocalData(p => ({...p, image: e.target.value}))}/><p className="text-xs text-slate-500">Masukkan URL gambar (Direct Link) untuk logo sekolah.</p></div></div></div></div>
                         </div>
-                        <div className="bg-white p-6 rounded-xl border shadow-sm"><div className="flex justify-between items-center mb-4 border-b pb-2"><h3 className="font-bold text-lg text-slate-700">Data Wali Kelas</h3><select className="border p-1.5 rounded text-sm bg-slate-50" value={walasFilter} onChange={e=>setWalasFilter(e.target.value)}><option value="">Semua Kelas</option>{data.kelas.map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}</select></div><div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">{classesToEdit.length > 0 ? classesToEdit.map(c => (<div key={c.id} className="p-3 border rounded-lg bg-slate-50"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Kelas {c.nama}</label><input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-secondary outline-none text-sm" placeholder="Nama Wali Kelas + Gelar" value={(localData.wali_kelas_per_kelas && localData.wali_kelas_per_kelas[c.nama]) || ''} onChange={e => handleWalasChange(c.nama, e.target.value)}/></div>)) : <div className="text-center text-slate-400 py-4">Tidak ada data kelas</div>}</div></div>
+                        <div className="bg-white p-6 rounded-xl border shadow-sm"><div className="flex justify-between items-center mb-4 border-b pb-2"><h3 className="font-bold text-lg text-slate-700">Data Wali Kelas</h3><select className="border p-1.5 rounded text-sm bg-slate-50" value={walasFilter} onChange={e=>setWalasFilter(e.target.value)}><option value="">Semua Kelas</option>{(data.kelas || []).map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}</select></div><div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">{classesToEdit.length > 0 ? classesToEdit.map(c => (<div key={c.id} className="p-3 border rounded-lg bg-slate-50"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Kelas {c.nama}</label><input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-secondary outline-none text-sm" placeholder="Nama Wali Kelas + Gelar" value={(localData.wali_kelas_per_kelas && localData.wali_kelas_per_kelas[c.nama]) || ''} onChange={e => handleWalasChange(c.nama, e.target.value)}/></div>)) : <div className="text-center text-slate-400 py-4">Tidak ada data kelas</div>}</div></div>
                     </div>
                 </div>
             );
         };
         
         const DataSekolah = ({ data, setData, notify }) => { 
-            const [localData, setLocalData] = useState(data.sekolah);
-            useEffect(() => { setLocalData(data.sekolah); }, [data.sekolah]);
+            const [localData, setLocalData] = useState(data.sekolah || {});
+            useEffect(() => { setLocalData(data.sekolah || {}); }, [data.sekolah]);
             const handleSave = () => { setData(prev => ({ ...prev, sekolah: localData })); notify('Perubahan disimpan', 'success'); };
             return (
                 <div className="space-y-6 animate-fade">
@@ -452,15 +452,15 @@
         };
 
         const MappingRapor = ({ dataMapel, classList, setData, notify }) => { 
-            const [edits, setEdits] = useState(dataMapel); const [selectedClass, setSelectedClass] = useState('');
-            useEffect(() => { setEdits(dataMapel); }, [dataMapel]);
-            const handleToggleActive = (mapelId, className) => { setEdits(prev => prev.map(m => { if (m.id === mapelId) { const currentClasses = m.kelas || []; let newClasses; if (currentClasses.includes(className)) { newClasses = currentClasses.filter(c => c !== className); } else { newClasses = [...currentClasses, className]; } return { ...m, kelas: newClasses }; } return m; })); };
-            const handleChange = (id, field, val) => setEdits(prev => prev.map(m => m.id === id ? { ...m, [field]: val } : m));
+            const [edits, setEdits] = useState(dataMapel || []); const [selectedClass, setSelectedClass] = useState('');
+            useEffect(() => { setEdits(dataMapel || []); }, [dataMapel]);
+            const handleToggleActive = (mapelId, className) => { setEdits(prev => prev.map(m => { if (String(m.id) === String(mapelId)) { const currentClasses = m.kelas || []; let newClasses; if (currentClasses.includes(className)) { newClasses = currentClasses.filter(c => c !== className); } else { newClasses = [...currentClasses, className]; } return { ...m, kelas: newClasses }; } return m; })); };
+            const handleChange = (id, field, val) => setEdits(prev => prev.map(m => String(m.id) === String(id) ? { ...m, [field]: val } : m));
             const save = () => { setData(prev => ({ ...prev, mapel: edits })); notify("Mapping berhasil disimpan"); };
             const sortedMapels = [...edits].sort((a,b)=>a.urutan-b.urutan);
             return (
                 <div className="space-y-6 animate-fade">
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="text-2xl font-bold text-slate-800">Mapping Rapor (Per Kelas)</h2><div className="flex gap-2 w-full md:w-auto"><select className="border p-2 rounded-lg bg-white text-sm w-full md:w-64 font-bold text-slate-700 focus:ring-2 focus:ring-secondary outline-none" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}><option value="">-- Pilih Kelas --</option>{classList.map(c=><option key={c.id} value={c.nama}>Pengaturan Kelas {c.nama}</option>)}</select><button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow flex gap-2 items-center hover:bg-blue-700 transition whitespace-nowrap"><Icon name="save" size={18}/> Simpan</button></div></div>
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="text-2xl font-bold text-slate-800">Mapping Rapor (Per Kelas)</h2><div className="flex gap-2 w-full md:w-auto"><select className="border p-2 rounded-lg bg-white text-sm w-full md:w-64 font-bold text-slate-700 focus:ring-2 focus:ring-secondary outline-none" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}><option value="">-- Pilih Kelas --</option>{(classList||[]).map(c=><option key={c.id} value={c.nama}>Pengaturan Kelas {c.nama}</option>)}</select><button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow flex gap-2 items-center hover:bg-blue-700 transition whitespace-nowrap"><Icon name="save" size={18}/> Simpan</button></div></div>
                     {selectedClass ? (
                         <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden"><div className="p-4 bg-blue-50 border-b flex items-center gap-2 text-blue-800 text-sm"><Icon name="info" size={16}/><span>Menampilkan pengaturan mata pelajaran untuk <b>Kelas {selectedClass}</b>. Centang "Aktif" untuk menampilkan mapel di rapor kelas ini.</span></div><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-slate-600 uppercase text-xs"><tr><th className="p-3 w-16 text-center">Urut</th><th className="p-3">Mata Pelajaran</th><th className="p-3 w-24">Kelompok</th><th className="p-3">Parent Group</th><th className="p-3 w-20 text-center">KKM</th><th className="p-3 w-32 text-center bg-yellow-50/50">Aktif di {selectedClass}?</th></tr></thead><tbody className="divide-y divide-slate-100">{sortedMapels.length > 0 ? sortedMapels.map(m => { const isActive = m.kelas && m.kelas.includes(selectedClass); return (<tr key={m.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50 bg-slate-50' : ''}`}><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.urutan} onChange={e=>handleChange(m.id,'urutan',parseInt(e.target.value))}/></td><td className="p-2 font-medium">{m.nama}</td><td className="p-2"><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kelompok} onChange={e=>handleChange(m.id,'kelompok',e.target.value)}><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></td><td className="p-2"><input type="text" className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.parent||''} placeholder="-" onChange={e=>handleChange(m.id,'parent',e.target.value)}/></td><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kkm} onChange={e=>handleChange(m.id,'kkm',parseInt(e.target.value))}/></td><td className="p-2 text-center bg-yellow-50/30"><label className="flex items-center justify-center cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-emerald-500 cursor-pointer" checked={isActive} onChange={() => handleToggleActive(m.id, selectedClass)}/></label></td></tr>); }) : <tr><td colSpan="6" className="p-8 text-center text-slate-400">Tidak ada data mapel</td></tr>}</tbody></table></div>
                     ) : ( <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-dashed text-slate-400"><Icon name="arrow-up-circle" size={48} className="mb-4 text-slate-300"/><p className="text-lg font-medium">Silakan pilih kelas terlebih dahulu</p></div> )}
@@ -470,41 +470,42 @@
 
         const TableView = ({ title, heads, data, renderRow, onAdd, onEdit, onDelete, searchKeys=[], filterOptions=[], filterKey='', onImport, onDownloadTemplate }) => {
             const [query, setQuery] = useState(''); const [filterVal, setFilterVal] = useState(''); const fileInputRef = useRef(null);
-            const filteredData = data.filter(item => { const matchesSearch = !query || searchKeys.some(key => String(item[key]).toLowerCase().includes(query.toLowerCase())); let matchesFilter = true; if (filterVal && filterKey) { const itemVal = item[filterKey]; matchesFilter = Array.isArray(itemVal) ? itemVal.includes(filterVal) : itemVal === filterVal; } return matchesSearch && matchesFilter; });
+            const safeData = data || [];
+            const filteredData = safeData.filter(item => { const matchesSearch = !query || searchKeys.some(key => String(item[key]).toLowerCase().includes(query.toLowerCase())); let matchesFilter = true; if (filterVal && filterKey) { const itemVal = item[filterKey]; matchesFilter = Array.isArray(itemVal) ? itemVal.includes(filterVal) : String(itemVal) === String(filterVal); } return matchesSearch && matchesFilter; });
             return (
                 <div className="space-y-4 animate-fade">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="text-2xl font-bold text-slate-800">{title}</h2><div className="flex gap-2 w-full md:w-auto flex-wrap justify-end">{filterOptions.length > 0 && (<select className="border p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-secondary outline-none" value={filterVal} onChange={e=>setFilterVal(e.target.value)}><option value="">Semua {filterKey === 'kelas' ? 'Kelas' : 'Filter'}</option>{filterOptions.map(opt => <option key={opt.id} value={opt.nama}>{opt.nama}</option>)}</select>)}{searchKeys.length > 0 && (<div className="relative flex-1 md:w-64 min-w-[200px]"><span className="absolute left-3 top-2.5 text-slate-400"><Icon name="search" size={16}/></span><input type="text" placeholder="Cari data..." className="pl-9 pr-4 py-2 border rounded-lg w-full focus:ring-2 focus:ring-secondary outline-none text-sm" value={query} onChange={e=>setQuery(e.target.value)} /></div>)}{onImport && (<><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={onImport} /><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 text-sm shadow hover:bg-emerald-700 transition items-center font-medium"><Icon name="upload" size={16}/> Import</button></>)}{onDownloadTemplate && (<button onClick={onDownloadTemplate} className="bg-slate-600 text-white px-4 py-2 rounded-lg flex gap-2 text-sm shadow hover:bg-slate-700 transition items-center font-medium"><Icon name="download" size={16}/> Format</button>)}{onAdd && <button onClick={onAdd} className="bg-secondary text-white px-4 py-2 rounded-lg flex gap-2 text-sm shadow hover:bg-blue-600 transition items-center font-medium"><Icon name="plus" size={16}/> Tambah</button>}</div></div>
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 border-b text-slate-600 uppercase text-xs tracking-wider"><tr><th className="p-4 w-12 text-center">No</th>{heads.map((h,i)=><th key={i} className="p-4 font-semibold">{h}</th>)}{(onEdit || onDelete) && <th className="p-4 text-right">Aksi</th>}</tr></thead><tbody className="divide-y divide-slate-100">{filteredData.length > 0 ? filteredData.map((item,i)=>(<tr key={item.id || i} className="hover:bg-slate-50 transition-colors"><td className="p-4 text-center text-slate-500">{i+1}</td>{renderRow(item)}{(onEdit || onDelete) && <td className="p-4 text-right"><div className="flex justify-end gap-2">{onEdit && <button onClick={() => onEdit(item)} className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100"><Icon name="edit" size={16}/></button>}{onDelete && <button onClick={() => onDelete(item.id)} className="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100"><Icon name="trash-2" size={16}/></button>}</div></td>}</tr>)) : <tr><td colSpan={heads.length + 2} className="p-8 text-center text-slate-400 italic">Data tidak ditemukan</td></tr>}</tbody></table></div></div>
-                    <div className="text-xs text-slate-400 text-right">Menampilkan {filteredData.length} dari {data.length} data</div>
+                    <div className="text-xs text-slate-400 text-right">Menampilkan {filteredData.length} dari {safeData.length} data</div>
                 </div>
             );
         };
 
         const Dashboard = ({ data }) => {
             const { siswa, guru, kelas, mapel } = data;
-            const stats = [{ title: 'Total Siswa', count: siswa.length, color: 'bg-blue-500', icon: 'users' }, { title: 'Total Guru', count: guru.length, color: 'bg-emerald-500', icon: 'graduation-cap' }, { title: 'Rombel', count: kelas.length, color: 'bg-amber-500', icon: 'school' }, { title: 'Mata Pelajaran', count: mapel.length, color: 'bg-indigo-500', icon: 'book-open' }];
+            const stats = [{ title: 'Total Siswa', count: (siswa||[]).length, color: 'bg-blue-500', icon: 'users' }, { title: 'Total Guru', count: (guru||[]).length, color: 'bg-emerald-500', icon: 'graduation-cap' }, { title: 'Rombel', count: (kelas||[]).length, color: 'bg-amber-500', icon: 'school' }, { title: 'Mata Pelajaran', count: (mapel||[]).length, color: 'bg-indigo-500', icon: 'book-open' }];
             return (
                 <div className="space-y-6 animate-fade">
                     <h2 className="text-2xl font-bold text-slate-800">Dashboard Ikhtisar</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">{stats.map((s,i) => (<div key={i} className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition cursor-default"><div className={`p-4 rounded-xl text-white ${s.color} shadow-lg shadow-${s.color}/30`}><Icon name={s.icon} size={24}/></div><div><p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{s.title}</p><h3 className="text-3xl font-bold text-slate-800">{s.count}</h3></div></div>))}</div>
-                    <div className="bg-white p-6 rounded-xl border shadow-sm"><h3 className="font-bold mb-4">Informasi Akademik</h3><ul className="space-y-3 text-sm"><li className="flex justify-between border-b pb-2"><span>Tahun Ajaran Aktif</span><span className="font-bold text-blue-600">{data.sekolah.tahunPelajaran} - {data.sekolah.semester}</span></li><li className="flex justify-between border-b pb-2"><span>Nama Sekolah</span><span className="font-medium text-right w-1/2">{data.sekolah.nama}</span></li><li className="flex justify-between border-b pb-2"><span>Kepala Sekolah</span><span className="font-medium">{data.sekolah.kepalaSekolah}</span></li></ul></div>
+                    <div className="bg-white p-6 rounded-xl border shadow-sm"><h3 className="font-bold mb-4">Informasi Akademik</h3><ul className="space-y-3 text-sm"><li className="flex justify-between border-b pb-2"><span>Tahun Ajaran Aktif</span><span className="font-bold text-blue-600">{(data.sekolah||{}).tahunPelajaran} - {(data.sekolah||{}).semester}</span></li><li className="flex justify-between border-b pb-2"><span>Nama Sekolah</span><span className="font-medium text-right w-1/2">{(data.sekolah||{}).nama}</span></li><li className="flex justify-between border-b pb-2"><span>Kepala Sekolah</span><span className="font-medium">{(data.sekolah||{}).kepalaSekolah}</span></li></ul></div>
                 </div>
             );
         };
 
         const MonitoringNilai = ({ data }) => {
             const guruStats = useMemo(() => {
-                return data.guru.map(g => {
-                    const mapelObj = data.mapel.find(m => m.nama.toLowerCase() === (g.mapel || '').trim().toLowerCase());
+                return (data.guru || []).map(g => {
+                    const mapelObj = (data.mapel || []).find(m => m.nama.toLowerCase() === (g.mapel || '').trim().toLowerCase());
                     const mapelId = mapelObj ? mapelObj.id : null;
                     const targetClasses = g.kelasMengajar || [];
-                    const students = data.siswa.filter(s => targetClasses.includes(s.kelas));
+                    const students = (data.siswa || []).filter(s => targetClasses.includes(s.kelas));
                     const totalStudents = students.length;
                     
                     let filledStudents = 0;
                     if (mapelId && totalStudents > 0) {
                         students.forEach(s => {
-                            const gradeRecord = data.nilaiMapel.find(n => n.siswa_id === s.id && n.mapel_id === mapelId);
+                            const gradeRecord = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelId));
                             if (gradeRecord) {
                                 // Define 'filled' if at least one grade field has a value > 0
                                 const hasGrade = ['s1','s2','s3','s4','s5','sts','sas'].some(k => parseInt(gradeRecord[k]) > 0);
@@ -574,34 +575,34 @@
 
             const currentGuru = useMemo(() => {
                 if (user.role === 'admin') return null;
-                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = data.guru.find(g => String(g.id) === String(guruId)); if (byId) return byId; }
-                if (user.nip) { const byNip = data.guru.find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
-                return data.guru.find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
+                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = (data.guru || []).find(g => String(g.id) === String(guruId)); if (byId) return byId; }
+                if (user.nip) { const byNip = (data.guru || []).find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
+                return (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
             }, [user, data.guru]);
 
-            // EXACT MATCH: Kelas yang diajarkan Sesuai Database
-            const filteredKelas = useMemo(() => { if (!currentGuru) return data.kelas; return data.kelas.filter(k => (currentGuru.kelasMengajar || []).includes(k.nama)); }, [data.kelas, currentGuru]);
+            const filteredKelas = useMemo(() => { if (!currentGuru) return data.kelas || []; return (data.kelas || []).filter(k => (currentGuru.kelasMengajar || []).includes(k.nama)); }, [data.kelas, currentGuru]);
             
-            // EXACT MATCH: Mapel yang diajarkan Sesuai Database & Aktif di Kelas
             const availableMapel = useMemo(() => {
-                let mapels = data.mapel.filter(m => m.aktif !== false);
+                let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
                 if (currentGuru && currentGuru.mapel) mapels = mapels.filter(m => m.nama.trim().toLowerCase() === currentGuru.mapel.trim().toLowerCase());
                 return mapels.sort((a,b) => a.urutan - b.urutan);
             }, [data.mapel, selKelas, currentGuru]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
-            useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => m.id === parseInt(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
+            useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
 
             const handleSave = () => {
                 if(!selMapel) return notify('Pilih Mapel dulu', 'error');
                 setData((prevData) => {
-                    const updatedNilai = [...prevData.nilaiMapel];
+                    const updatedNilai = [...(prevData.nilaiMapel || [])];
                     Object.keys(buffer).forEach(key => {
-                        const [siswaId, field] = key.split('-');
-                        const idx = updatedNilai.findIndex(n => n.siswa_id === parseInt(siswaId) && n.mapel_id === parseInt(selMapel));
+                        const parts = key.split('-');
+                        const siswaIdStr = parts[0];
+                        const field = parts.slice(1).join('-');
+
+                        const idx = updatedNilai.findIndex(n => String(n.siswa_id) === String(siswaIdStr) && String(n.mapel_id) === String(selMapel));
                         
-                        // PERBAIKAN: Mengganti dan menimpa nilai secara mutlak, termasuk saat dikosongkan
                         let val = buffer[key];
                         if (val !== '') {
                             val = parseInt(val);
@@ -611,7 +612,9 @@
                         if(idx > -1) {
                             updatedNilai[idx] = { ...updatedNilai[idx], [field]: val };
                         } else {
-                            updatedNilai.push({ siswa_id: parseInt(siswaId), mapel_id: parseInt(selMapel), s1:'',s2:'',s3:'',s4:'',s5:'',sts:'',sas:'',psaj_praktik:'',psaj_tulis:'', [field]: val });
+                            const sId = isNaN(Number(siswaIdStr)) ? siswaIdStr : Number(siswaIdStr);
+                            const mId = isNaN(Number(selMapel)) ? selMapel : Number(selMapel);
+                            updatedNilai.push({ siswa_id: sId, mapel_id: mId, s1:'',s2:'',s3:'',s4:'',s5:'',sts:'',sas:'',psaj_praktik:'',psaj_tulis:'', [field]: val });
                         }
                     });
                     return { ...prevData, nilaiMapel: updatedNilai };
@@ -621,7 +624,7 @@
 
             const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
             const downloadTemplateNilai = () => { 
-                const siswaKelas = data.siswa.filter(s => s.kelas === selKelas); if (siswaKelas.length === 0) return notify('Tidak ada siswa', 'error');
+                const siswaKelas = (data.siswa || []).filter(s => s.kelas === selKelas); if (siswaKelas.length === 0) return notify('Tidak ada siswa', 'error');
                 const headers = [['NO', 'NOMOR INDUK', 'NAMA', 'S1', 'S2', 'S3', 'S4', 'S5', 'STS', 'SAS']];
                 if (isKelas12) headers[0].push('PSAJ PRAKTIK', 'PSAJ TULIS');
                 const rows = siswaKelas.map((s, i) => { const row = [i + 1, s.nisn, s.nama, '', '', '', '', '', '', '']; if (isKelas12) row.push('', ''); return row; });
@@ -636,7 +639,7 @@
                     const newBuffer = { ...buffer }; let count = 0;
                     json.forEach(row => {
                         const nisn = String(row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn']);
-                        const siswa = data.siswa.find(s => s.nisn === nisn);
+                        const siswa = (data.siswa || []).find(s => String(s.nisn) === nisn);
                         if (siswa) {
                             ['S1','S2','S3','S4','S5','STS','SAS','PSAJ PRAKTIK','PSAJ TULIS'].forEach(field => {
                                 const val = row[field] || row[field.toLowerCase()];
@@ -649,12 +652,12 @@
                 }; reader.readAsBinaryString(file); e.target.value = null;
             };
 
-            const students = useMemo(() => data.siswa.filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
+            const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Akademik</h2><div className="flex gap-2">{selKelas && selMapel && (<><button onClick={downloadTemplateNilai} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Format</button><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="upload" size={16}/> Import</button><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={importNilai} /></>)}<button onClick={handleSave} className="bg-accent text-white px-4 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm"><Icon name="save" size={16}/> Simpan</button></div></div>
                     <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5','STS','SAS'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}<th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = data.nilaiMapel.find(n => n.siswa_id === s.id && n.mapel_id === parseInt(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] || ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? sumatif.reduce((a,b)=>a+b,0)/sumatif.length : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = Math.round((rerata + sts + sas) / 3); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5','sts','sas'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}<td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
+                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5','STS','SAS'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}<th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] || ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? sumatif.reduce((a,b)=>a+b,0)/sumatif.length : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = Math.round((rerata + sts + sas) / 3); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5','sts','sas'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}<td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
                 </div>
             )
         };
@@ -662,33 +665,44 @@
         const InputEkskul = ({ data, setData, notify, user, currentGuru }) => { 
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
             
-            // EXACT MATCH WALAS: Mengekstrak eksak nama kelas dari String "Wali Kelas XII-A"
             const availableClasses = useMemo(() => { 
-                if (user.role === 'admin') return data.kelas; 
+                if (user.role === 'admin') return data.kelas || []; 
                 if (currentGuru && currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase().includes('wali kelas')) { 
                     const walasClassName = currentGuru.tugasTambahan.replace(/wali kelas/i, '').trim();
-                    return data.kelas.filter(k => k.nama === walasClassName); 
+                    return (data.kelas || []).filter(k => k.nama === walasClassName); 
                 } 
                 return []; 
             }, [data.kelas, user, currentGuru]);
 
             useEffect(() => { if (availableClasses.length === 1 && !selKelas) { setSelKelas(availableClasses[0].nama); } }, [availableClasses, selKelas]);
-            const getVal = (siswaId, slotIdx, field) => { const key = `${siswaId}-${slotIdx}-${field}`; if (buffer[key] !== undefined) return buffer[key]; const studentEkskuls = data.nilaiEkskul.filter(n => n.siswa_id === siswaId); return studentEkskuls[slotIdx] ? studentEkskuls[slotIdx][field === 'id' ? 'ekskul_id' : 'predikat'] : ''; };
+            const getVal = (siswaId, slotIdx, field) => { const key = `${siswaId}-${slotIdx}-${field}`; if (buffer[key] !== undefined) return buffer[key]; const studentEkskuls = (data.nilaiEkskul || []).filter(n => String(n.siswa_id) === String(siswaId)); return studentEkskuls[slotIdx] ? studentEkskuls[slotIdx][field === 'id' ? 'ekskul_id' : 'predikat'] : ''; };
             const handleSave = () => {
                 if (!selKelas) return notify('Pilih Kelas dulu', 'error');
                 setData((prevData) => {
-                    const students = prevData.siswa.filter(s => s.kelas === selKelas); let newNilaiEkskul = prevData.nilaiEkskul.filter(n => !students.find(s => s.id === n.siswa_id));
-                    students.forEach(s => { const existingRecords = prevData.nilaiEkskul.filter(n => n.siswa_id === s.id); [0, 1].forEach(slotIdx => { let ekskulId = buffer[`${s.id}-${slotIdx}-id`]; let predikat = buffer[`${s.id}-${slotIdx}-predikat`]; if (ekskulId === undefined) ekskulId = existingRecords[slotIdx]?.ekskul_id; if (predikat === undefined) predikat = existingRecords[slotIdx]?.predikat; if (ekskulId && predikat) newNilaiEkskul.push({ id: Date.now() + Math.random(), siswa_id: s.id, ekskul_id: parseInt(ekskulId), predikat: predikat }); }); });
+                    const students = (prevData.siswa || []).filter(s => s.kelas === selKelas); 
+                    let newNilaiEkskul = (prevData.nilaiEkskul || []).filter(n => !students.find(s => String(s.id) === String(n.siswa_id)));
+                    students.forEach(s => { 
+                        const existingRecords = (prevData.nilaiEkskul || []).filter(n => String(n.siswa_id) === String(s.id)); 
+                        [0, 1].forEach(slotIdx => { 
+                            let ekskulId = buffer[`${s.id}-${slotIdx}-id`]; 
+                            let predikat = buffer[`${s.id}-${slotIdx}-predikat`]; 
+                            if (ekskulId === undefined) ekskulId = existingRecords[slotIdx]?.ekskul_id; 
+                            if (predikat === undefined) predikat = existingRecords[slotIdx]?.predikat; 
+                            if (ekskulId && predikat) {
+                                newNilaiEkskul.push({ id: Date.now() + Math.random(), siswa_id: isNaN(Number(s.id)) ? s.id : Number(s.id), ekskul_id: isNaN(Number(ekskulId)) ? ekskulId : Number(ekskulId), predikat: predikat }); 
+                            }
+                        }); 
+                    });
                     return { ...prevData, nilaiEkskul: newNilaiEkskul };
                 });
                 setBuffer({}); notify('Nilai Ekskul berhasil disimpan!', 'success');
             };
-            const students = useMemo(() => data.siswa.filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
+            const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Ekstrakurikuler</h2><button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold"><Icon name="save"/> Simpan</button></div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{availableClasses.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select></div>
-                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 w-1/3">Nama Siswa</th><th className="p-3 text-center bg-slate-100 border-l border-r" colSpan="2">Kegiatan 1</th><th className="p-3 text-center bg-slate-50" colSpan="2">Kegiatan 2</th></tr></thead><tbody className="divide-y">{students.map(s => { return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium border-r">{s.nama}</td>{[0, 1].map(i => (<React.Fragment key={i}><td className={`p-2 ${i===0 ? 'bg-slate-50/50' : ''}`}><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition text-sm" value={getVal(s.id, i, 'id')} onChange={e => setBuffer(prev => ({...prev, [`${s.id}-${i}-id`]: e.target.value}))}><option value="">-</option>{data.ekskulRef.map(e => <option key={e.id} value={e.id}>{e.nama}</option>)}</select></td><td className={`p-2 text-center border-r ${i===0 ? 'bg-slate-50/50' : ''}`}><input type="text" className="w-12 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition uppercase" placeholder="-" maxLength="2" value={getVal(s.id, i, 'predikat')} onChange={e => setBuffer(prev => ({...prev, [`${s.id}-${i}-predikat`]: e.target.value}))}/></td></React.Fragment>))}</tr>) })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input nilai ekskul.</div>}
+                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 w-1/3">Nama Siswa</th><th className="p-3 text-center bg-slate-100 border-l border-r" colSpan="2">Kegiatan 1</th><th className="p-3 text-center bg-slate-50" colSpan="2">Kegiatan 2</th></tr></thead><tbody className="divide-y">{students.map(s => { return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium border-r">{s.nama}</td>{[0, 1].map(i => (<React.Fragment key={i}><td className={`p-2 ${i===0 ? 'bg-slate-50/50' : ''}`}><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition text-sm" value={getVal(s.id, i, 'id')} onChange={e => setBuffer(prev => ({...prev, [`${s.id}-${i}-id`]: e.target.value}))}><option value="">-</option>{(data.ekskulRef || []).map(e => <option key={e.id} value={e.id}>{e.nama}</option>)}</select></td><td className={`p-2 text-center border-r ${i===0 ? 'bg-slate-50/50' : ''}`}><input type="text" className="w-12 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition uppercase" placeholder="-" maxLength="2" value={getVal(s.id, i, 'predikat')} onChange={e => setBuffer(prev => ({...prev, [`${s.id}-${i}-predikat`]: e.target.value}))}/></td></React.Fragment>))}</tr>) })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input nilai ekskul.</div>}
                 </div>
             );
         };
@@ -696,12 +710,11 @@
         const InputAbsensi = ({ data, setData, notify, user, currentGuru }) => {
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
             
-            // EXACT MATCH WALAS
             const availableClasses = useMemo(() => { 
-                if (user.role === 'admin') return data.kelas; 
+                if (user.role === 'admin') return data.kelas || []; 
                 if (currentGuru && currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase().includes('wali kelas')) { 
                     const walasClassName = currentGuru.tugasTambahan.replace(/wali kelas/i, '').trim();
-                    return data.kelas.filter(k => k.nama === walasClassName); 
+                    return (data.kelas || []).filter(k => k.nama === walasClassName); 
                 } 
                 return []; 
             }, [data.kelas, user, currentGuru]);
@@ -710,18 +723,36 @@
             const handleSave = () => {
                 if(!selKelas) return notify('Pilih Kelas dulu', 'error');
                 setData((prevData) => {
-                    const updatedAbsensi = [...prevData.absensi];
-                    Object.keys(buffer).forEach(key => { const [siswaId, field] = key.split('-'); const idx = updatedAbsensi.findIndex(a => a.siswa_id === parseInt(siswaId)); const val = parseInt(buffer[key]) || 0; if(idx > -1) updatedAbsensi[idx] = { ...updatedAbsensi[idx], [field]: val }; else updatedAbsensi.push({ siswa_id: parseInt(siswaId), sakit:0, izin:0, alpa:0, [field]: val }); });
+                    const updatedAbsensi = [...(prevData.absensi || [])];
+                    Object.keys(buffer).forEach(key => { 
+                        const parts = key.split('-');
+                        const siswaIdStr = parts[0];
+                        const field = parts.slice(1).join('-');
+                        
+                        const idx = updatedAbsensi.findIndex(a => String(a.siswa_id) === String(siswaIdStr)); 
+                        let val = buffer[key]; 
+                        if (val !== '') {
+                            val = parseInt(val);
+                            if (isNaN(val)) val = '';
+                        }
+                        
+                        if(idx > -1) {
+                            updatedAbsensi[idx] = { ...updatedAbsensi[idx], [field]: val }; 
+                        } else {
+                            const sId = isNaN(Number(siswaIdStr)) ? siswaIdStr : Number(siswaIdStr);
+                            updatedAbsensi.push({ siswa_id: sId, sakit:'', izin:'', alpa:'', [field]: val }); 
+                        }
+                    });
                     return { ...prevData, absensi: updatedAbsensi };
                 });
                 setBuffer({}); notify('Data Absensi berhasil disimpan!', 'success');
             };
-            const students = useMemo(() => data.siswa.filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
+            const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Ketidakhadiran</h2><button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold"><Icon name="save"/> Simpan</button></div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{availableClasses.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select></div>
-                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Nama Siswa</th><th className="p-3 w-32 text-center">Sakit (Hari)</th><th className="p-3 w-32 text-center">Izin (Hari)</th><th className="p-3 w-32 text-center">Alpa (Hari)</th></tr></thead><tbody className="divide-y">{students.map(s => { const absen = data.absensi.find(a => a.siswa_id === s.id) || {sakit:0,izin:0,alpa:0}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : absen[f]; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{s.nama}</td>{['sakit','izin','alpa'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-20 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input absensi.</div>}
+                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Nama Siswa</th><th className="p-3 w-32 text-center">Sakit (Hari)</th><th className="p-3 w-32 text-center">Izin (Hari)</th><th className="p-3 w-32 text-center">Alpa (Hari)</th></tr></thead><tbody className="divide-y">{students.map(s => { const absen = (data.absensi || []).find(a => String(a.siswa_id) === String(s.id)) || {sakit:'',izin:'',alpa:''}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : absen[f]; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{s.nama}</td>{['sakit','izin','alpa'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-20 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input absensi.</div>}
                 </div>
             )
         };
@@ -730,34 +761,32 @@
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState('');
             const currentGuru = useMemo(() => {
                 if (user.role === 'admin') return null;
-                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = data.guru.find(g => String(g.id) === String(guruId)); if (byId) return byId; }
-                if (user.nip) { const byNip = data.guru.find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
-                return data.guru.find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
+                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = (data.guru || []).find(g => String(g.id) === String(guruId)); if (byId) return byId; }
+                if (user.nip) { const byNip = (data.guru || []).find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
+                return (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
             }, [user, data.guru]);
 
-            // EXACT MATCH Mengajar
-            const filteredKelas = useMemo(() => { if (!currentGuru) return data.kelas; return data.kelas.filter(k => (currentGuru.kelasMengajar || []).includes(k.nama)); }, [data.kelas, currentGuru]);
+            const filteredKelas = useMemo(() => { if (!currentGuru) return data.kelas || []; return (data.kelas || []).filter(k => (currentGuru.kelasMengajar || []).includes(k.nama)); }, [data.kelas, currentGuru]);
             
-            // EXACT MATCH Mapel & Kelas
             const availableMapel = useMemo(() => {
-                let mapels = data.mapel.filter(m => m.aktif !== false);
+                let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
                 if (currentGuru && currentGuru.mapel) mapels = mapels.filter(m => m.nama.trim().toLowerCase() === currentGuru.mapel.trim().toLowerCase());
                 return mapels.sort((a,b) => a.urutan - b.urutan);
             }, [data.mapel, selKelas, currentGuru]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
-            useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => m.id === parseInt(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
+            useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
 
             const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
-            const students = useMemo(() => data.siswa.filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
+            const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             
             const downloadExcel = () => { /* Logic omitted for length, UI button kept functional-looking */ };
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Leger Nilai</h2><button onClick={downloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Download Excel</button></div>
                     <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th><th className="p-3 w-16">STS</th><th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = data.nilaiMapel.find(n => n.siswa_id === s.id && n.mapel_id === parseInt(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const sts = parseInt(val.sts) || 0; const sas = parseInt(val.sas) || 0; const akhir = Math.round((rerata + sts + sas) / 3); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td><td className="p-3">{val.sts||'-'}</td><td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
+                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th><th className="p-3 w-16">STS</th><th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const sts = parseInt(val.sts) || 0; const sas = parseInt(val.sas) || 0; const akhir = Math.round((rerata + sts + sas) / 3); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td><td className="p-3">{val.sts||'-'}</td><td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
                 </div>
             );
         };
@@ -765,18 +794,17 @@
         const CetakRaporSisipan = ({ data, handlePrint, user, currentGuru }) => {
             const [selKelas, setSelKelas] = useState(''); 
             
-            // EXACT MATCH WALAS
             const availableClasses = useMemo(() => { 
-                if (user.role === 'admin') return data.kelas; 
+                if (user.role === 'admin') return data.kelas || []; 
                 if (currentGuru && currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase().includes('wali kelas')) { 
                     const walasClassName = currentGuru.tugasTambahan.replace(/wali kelas/i, '').trim();
-                    return data.kelas.filter(k => k.nama === walasClassName); 
+                    return (data.kelas || []).filter(k => k.nama === walasClassName); 
                 } 
                 return []; 
             }, [data.kelas, user, currentGuru]);
 
             useEffect(() => { if (availableClasses.length === 1 && !selKelas) { setSelKelas(availableClasses[0].nama); } }, [availableClasses, selKelas]);
-            const students = useMemo(() => selKelas ? data.siswa.filter(s => s.kelas === selKelas) : [], [data.siswa, selKelas]);
+            const students = useMemo(() => selKelas ? (data.siswa || []).filter(s => s.kelas === selKelas) : [], [data.siswa, selKelas]);
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Rapor Sisipan</h2></div>
@@ -790,34 +818,39 @@
 
         const PrintRapor = ({ data, siswa }) => {
             const { sekolah, mapel, nilaiMapel, ekskulRef, nilaiEkskul, absensi, logo } = data;
-            const myAbsen = absensi.find(a => a.siswa_id === siswa.id) || {sakit:0,izin:0,alpa:0};
-            const waliKelasName = (logo.wali_kelas_per_kelas && logo.wali_kelas_per_kelas[siswa.kelas]) || logo.wali_kelas || "Wali Kelas";
+            const myAbsen = (absensi || []).find(a => String(a.siswa_id) === String(siswa.id)) || {sakit:'',izin:'',alpa:''};
+            const waliKelasName = ((logo || {}).wali_kelas_per_kelas && (logo || {}).wali_kelas_per_kelas[siswa.kelas]) || (logo || {}).wali_kelas || "Wali Kelas";
             const calcScore = (val) => {
-                 if(!val) return { rerata:0, akhir:0, predikat:'-' };
+                 if(!val) return { rerata:'', akhir:'', predikat:'-' };
                  const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0);
-                 const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0;
-                 const akhir = Math.round((rerata + (parseInt(val.sts)||0)) / 2);
+                 const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : '';
+                 
+                 if (rerata === '' && !val.sts) return { rerata:'', akhir:'', predikat:'-' };
+                 
+                 const realRerata = rerata === '' ? 0 : rerata;
+                 const akhir = Math.round((realRerata + (parseInt(val.sts)||0)) / 2);
                  let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C';
                  return { rerata, akhir, predikat };
             };
-            const sortedMapel = mapel.filter(m => { if(m.aktif === false) return false; if(m.kelas && m.kelas.length > 0 && !m.kelas.includes(siswa.kelas)) return false; return true; }).sort((a,b) => a.urutan - b.urutan);
+            const sortedMapel = (mapel || []).filter(m => { if(m.aktif === false) return false; if(m.kelas && m.kelas.length > 0 && !m.kelas.includes(siswa.kelas)) return false; return true; }).sort((a,b) => a.urutan - b.urutan);
             const processedParents = new Set();
             const renderRow = (m) => {
-                const val = nilaiMapel.find(n => n.siswa_id === siswa.id && n.mapel_id === m.id) || {}; const score = calcScore(val);
+                const val = (nilaiMapel || []).find(n => String(n.siswa_id) === String(siswa.id) && String(n.mapel_id) === String(m.id)) || {}; 
+                const score = calcScore(val);
                 return (<tr key={m.id}><td className="text-center">{m.urutan}</td><td className="pl-1 truncate max-w-[150px]">{m.nama}</td><td className="text-center">{m.kkm}</td><td className="text-center">{val.s1||'-'}</td><td className="text-center">{val.s2||'-'}</td><td className="text-center">{val.s3||'-'}</td><td className="text-center">{val.s4||'-'}</td><td className="text-center">{val.s5||'-'}</td><td className="text-center font-bold bg-white">{score.rerata||''}</td><td className="text-center">{val.sts||'-'}</td><td className="text-center font-bold bg-white">{score.akhir||''}</td><td className="text-center">{score.predikat}</td></tr>);
             };
             const renderGroupWithHeader = (grp, title) => {
                 const groupItems = sortedMapel.filter(m => m.kelompok === grp); if (groupItems.length === 0) return null; 
                 return (<React.Fragment key={grp}><tr className="font-bold"><td colSpan="12" className="pl-2 py-0.5 text-[11px]">{title}</td></tr>{groupItems.map(m => { if (m.parent) { if (!processedParents.has(m.parent)) { processedParents.add(m.parent); return <React.Fragment key={`grp-${m.parent}`}><tr className="bg-white font-bold italic"><td colSpan="12" className="pl-2 py-0.5 text-[11px]">{m.parent}</td></tr>{renderRow(m)}</React.Fragment>; } return renderRow(m); } return renderRow(m); })}</React.Fragment>);
             };
-            const myEkskulList = nilaiEkskul.filter(n => n.siswa_id === siswa.id).map(n => { const ref = ekskulRef.find(e => e.id === n.ekskul_id); return { nama: ref?.nama || '-', predikat: n.predikat }; });
+            const myEkskulList = (nilaiEkskul || []).filter(n => String(n.siswa_id) === String(siswa.id)).map(n => { const ref = (ekskulRef || []).find(e => String(e.id) === String(n.ekskul_id)); return { nama: ref?.nama || '-', predikat: n.predikat }; });
             return (
                 <div className="w-full h-full bg-white text-black p-0 page-break relative text-[11pt]">
-                    <div className="flex items-center justify-between border-b-4 border-double border-black pb-2 mb-2"><div className="w-16 h-16 flex items-center justify-center font-bold text-center text-xs">{logo && logo.image ? (<img src={logo.image} alt="Logo" className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />) : "LOGO"}</div><div className="text-center flex-1"><h1 className="font-bold text-lg uppercase leading-tight">LAPORAN HASIL BELAJAR TENGAH SEMESTER</h1><h2 className="font-bold text-md">{sekolah.nama}</h2><p className="text-[11px]">{sekolah.alamat}</p></div><div className="w-16"></div></div>
-                    <div className="flex justify-between mb-2 text-[11px] font-sans"><table className="w-[60%]"><tbody><tr><td className="w-24">Nama</td><td className="w-2">:</td><td className="font-bold uppercase">{siswa.nama}</td></tr><tr><td>Nomor Induk</td><td>:</td><td>{siswa.nisn}</td></tr><tr><td>Kelas</td><td>:</td><td>{siswa.kelas} / {siswa.fase}</td></tr></tbody></table><table className="w-[35%]"><tbody><tr><td className="w-24">Tahun Ajaran</td><td className="w-2">:</td><td>{sekolah.tahunPelajaran}</td></tr><tr><td>Semester</td><td>:</td><td>{sekolah.semester}</td></tr></tbody></table></div>
+                    <div className="flex items-center justify-between border-b-4 border-double border-black pb-2 mb-2"><div className="w-16 h-16 flex items-center justify-center font-bold text-center text-xs">{(logo || {}).image ? (<img src={logo.image} alt="Logo" className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />) : "LOGO"}</div><div className="text-center flex-1"><h1 className="font-bold text-lg uppercase leading-tight">LAPORAN HASIL BELAJAR TENGAH SEMESTER</h1><h2 className="font-bold text-md">{(sekolah || {}).nama}</h2><p className="text-[11px]">{(sekolah || {}).alamat}</p></div><div className="w-16"></div></div>
+                    <div className="flex justify-between mb-2 text-[11px] font-sans"><table className="w-[60%]"><tbody><tr><td className="w-24">Nama</td><td className="w-2">:</td><td className="font-bold uppercase">{siswa.nama}</td></tr><tr><td>Nomor Induk</td><td>:</td><td>{siswa.nisn}</td></tr><tr><td>Kelas</td><td>:</td><td>{siswa.kelas} / {siswa.fase}</td></tr></tbody></table><table className="w-[35%]"><tbody><tr><td className="w-24">Tahun Ajaran</td><td className="w-2">:</td><td>{(sekolah || {}).tahunPelajaran}</td></tr><tr><td>Semester</td><td>:</td><td>{(sekolah || {}).semester}</td></tr></tbody></table></div>
                     <h3 className="font-bold mb-0.5 text-[12px] underline">A. Nilai Akademik</h3><table className="print-table mb-2"><thead className="text-center font-bold"><tr><th rowSpan="2" className="w-6">No</th><th rowSpan="2">Mata Pelajaran</th><th rowSpan="2" className="w-8">KKM</th><th colSpan="5" className="h-4">Sumatif</th><th rowSpan="2" className="w-8">Rata</th><th rowSpan="2" className="w-8">STS</th><th rowSpan="2" className="w-8">Akhir</th><th rowSpan="2" className="w-8">Pred</th></tr><tr className="text-[11px]"><th className="w-6">1</th><th className="w-6">2</th><th className="w-6">3</th><th className="w-6">4</th><th className="w-6">5</th></tr></thead><tbody>{renderGroupWithHeader('A', 'Kelompok A (Umum)')}{renderGroupWithHeader('B', 'Kelompok B (Muatan Lokal)')}{renderGroupWithHeader('C', 'Kelompok C (Peminatan)')}</tbody></table>
-                    <div className="flex gap-2 mb-4"><div className="flex-1"><h3 className="font-bold mb-0.5 text-[12px] underline">B. Ekstrakurikuler</h3><table className="print-table w-full"><thead className=""><tr><th className="w-6">No</th><th>Kegiatan</th><th className="w-12">Predikat</th></tr></thead><tbody>{myEkskulList.length > 0 ? myEkskulList.map((e,i)=>(<tr key={i}><td className="text-center">{i+1}</td><td className="pl-2">{e.nama}</td><td className="text-center">{e.predikat}</td></tr>)) : <tr><td colSpan="3" className="text-center">-</td></tr>}</tbody></table></div><div className="w-[35%]"><h3 className="font-bold mb-0.5 text-[12px] underline">C. Ketidakhadiran</h3><table className="print-table w-full"><tbody><tr><td>Sakit</td><td className="text-center w-12">{myAbsen.sakit}</td><td>Hari</td></tr><tr><td>Izin</td><td className="text-center">{myAbsen.izin}</td><td>Hari</td></tr><tr><td>Tanpa Ket.</td><td className="text-center">{myAbsen.alpa}</td><td>Hari</td></tr></tbody></table></div></div>
-                    <div className="flex justify-between mt-2 px-8 text-center text-[12px]"><div><p className="mb-10">Mengetahui,<br/>Orang Tua/Wali</p><p className="border-b border-black w-40 mx-auto"></p></div><div><p className="mb-10">{logo.kota}, {logo.tgl_rapor}<br/>Wali Kelas</p><p className="font-bold underline">{waliKelasName}</p><p>NIP. -</p></div></div>
+                    <div className="flex gap-2 mb-4"><div className="flex-1"><h3 className="font-bold mb-0.5 text-[12px] underline">B. Ekstrakurikuler</h3><table className="print-table w-full"><thead className=""><tr><th className="w-6">No</th><th>Kegiatan</th><th className="w-12">Predikat</th></tr></thead><tbody>{myEkskulList.length > 0 ? myEkskulList.map((e,i)=>(<tr key={i}><td className="text-center">{i+1}</td><td className="pl-2">{e.nama}</td><td className="text-center">{e.predikat}</td></tr>)) : <tr><td colSpan="3" className="text-center">-</td></tr>}</tbody></table></div><div className="w-[35%]"><h3 className="font-bold mb-0.5 text-[12px] underline">C. Ketidakhadiran</h3><table className="print-table w-full"><tbody><tr><td>Sakit</td><td className="text-center w-12">{myAbsen.sakit || '-'}</td><td>Hari</td></tr><tr><td>Izin</td><td className="text-center">{myAbsen.izin || '-'}</td><td>Hari</td></tr><tr><td>Tanpa Ket.</td><td className="text-center">{myAbsen.alpa || '-'}</td><td>Hari</td></tr></tbody></table></div></div>
+                    <div className="flex justify-between mt-2 px-8 text-center text-[12px]"><div><p className="mb-10">Mengetahui,<br/>Orang Tua/Wali</p><p className="border-b border-black w-40 mx-auto"></p></div><div><p className="mb-10">{(logo || {}).kota}, {(logo || {}).tgl_rapor}<br/>Wali Kelas</p><p className="font-bold underline">{waliKelasName}</p><p>NIP. -</p></div></div>
                 </div>
             );
         }
@@ -844,7 +877,7 @@
             // Validate login safely when semester data is fully fetched
             useEffect(() => {
                 if (pendingLogin && fbData && !loading) {
-                    const found = fbData.users.find(u => u.username === pendingLogin.username && u.password === pendingLogin.password);
+                    const found = (fbData.users || []).find(u => u.username === pendingLogin.username && u.password === pendingLogin.password);
                     if (found) {
                         setUser(found);
                         notify(`Berhasil masuk ke ${pendingLogin.tahun} - ${pendingLogin.semester}`);
@@ -858,9 +891,9 @@
 
             const currentGuru = useMemo(() => {
                 if (!user || user.role !== 'guru' || !data) return null;
-                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = data.guru.find(g => String(g.id) === String(guruId)); if (byId) return byId; }
-                if (user.nip) { const byNip = data.guru.find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
-                return data.guru.find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
+                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = (data.guru || []).find(g => String(g.id) === String(guruId)); if (byId) return byId; }
+                if (user.nip) { const byNip = (data.guru || []).find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
+                return (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
             }, [user, data]);
 
             const isWalas = useMemo(() => { 
@@ -893,8 +926,8 @@
                 const reader = new FileReader(); reader.onload = (e) => {
                     const fileData = new Uint8Array(e.target.result); const workbook = XLSX.read(fileData, { type: 'array' }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(sheet);
                     updateData(prev => {
-                        if (type === 'siswa') { const newSiswa = json.map(row => ({ id: Date.now() + Math.random(), nisn: String(row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn'] || ''), nama: String(row['NAMA'] || row['nama'] || row['NAMA LENGKAP'] || ''), kelas: String(row['KELAS'] || row['kelas'] || ''), fase: String(row['FASE'] || row['fase'] || 'E'), no_absen: row['NO_ABSEN'] || row['no_absen'] || 0 })).filter(s => s.nama); notify(`Berhasil import ${newSiswa.length} siswa!`, 'success'); return { ...prev, siswa: [...prev.siswa, ...newSiswa] }; } 
-                        else if (type === 'guru') { const newGuru = json.map(row => ({ id: Date.now() + Math.random(), nip: String(row['NIP'] || row['nip'] || ''), nama: String(row['NAMA'] || row['nama'] || ''), mapel: String(row['MAPEL'] || row['mapel'] || ''), tugasTambahan: String(row['TUGAS_TAMBAHAN'] || row['tugas_tambahan'] || '-') })).filter(g => g.nama); notify(`Berhasil import ${newGuru.length} guru!`, 'success'); return { ...prev, guru: [...prev.guru, ...newGuru] }; }
+                        if (type === 'siswa') { const newSiswa = json.map(row => ({ id: Date.now() + Math.random(), nisn: String(row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn'] || ''), nama: String(row['NAMA'] || row['nama'] || row['NAMA LENGKAP'] || ''), kelas: String(row['KELAS'] || row['kelas'] || ''), fase: String(row['FASE'] || row['fase'] || 'E'), no_absen: row['NO_ABSEN'] || row['no_absen'] || 0 })).filter(s => s.nama); notify(`Berhasil import ${newSiswa.length} siswa!`, 'success'); return { ...prev, siswa: [...(prev.siswa || []), ...newSiswa] }; } 
+                        else if (type === 'guru') { const newGuru = json.map(row => ({ id: Date.now() + Math.random(), nip: String(row['NIP'] || row['nip'] || ''), nama: String(row['NAMA'] || row['nama'] || ''), mapel: String(row['MAPEL'] || row['mapel'] || ''), tugasTambahan: String(row['TUGAS_TAMBAHAN'] || row['tugas_tambahan'] || '-') })).filter(g => g.nama); notify(`Berhasil import ${newGuru.length} guru!`, 'success'); return { ...prev, guru: [...(prev.guru || []), ...newGuru] }; }
                         return prev;
                     });
                 }; reader.readAsArrayBuffer(file); event.target.value = null;
@@ -905,7 +938,37 @@
             const BackupRestore = ({ data, setData, notify }) => {
                 const fileInputRef = useRef(null);
                 const handleBackup = () => { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); const downloadAnchorNode = document.createElement('a'); const timestamp = new Date().toISOString().slice(0,10); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", `backup_erapor_${timestamp}.json`); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); notify("Backup data berhasil diunduh!", "success"); };
-                const handleRestore = (event) => { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (e) => { try { const json = JSON.parse(e.target.result); if (json.sekolah && json.users && json.siswa && json.nilaiMapel) { if(confirm("Apakah Anda yakin ingin memulihkan data? Data saat ini akan ditimpa!")) { setData(json); notify("Data berhasil dipulihkan!", "success"); } } else { notify("Format file backup tidak valid.", "error"); } } catch (err) { notify("Gagal membaca file backup.", "error"); } }; reader.readAsText(file); event.target.value = null; };
+                const handleRestore = (event) => { 
+                    const file = event.target.files[0]; if (!file) return; 
+                    const reader = new FileReader(); 
+                    reader.onload = (e) => { 
+                        try { 
+                            const json = JSON.parse(e.target.result); 
+                            if (json.sekolah && json.users && json.siswa) { 
+                                if(confirm("Apakah Anda yakin ingin memulihkan data? Data saat ini akan ditimpa!")) { 
+                                    // PENTING: Penyelamatan array kosong agar tidak terjadi undefined / crash pada file backup lama
+                                    const safeData = {
+                                        ...SEED_DATA,
+                                        ...json,
+                                        sekolah: json.sekolah || SEED_DATA.sekolah,
+                                        users: json.users || [],
+                                        siswa: json.siswa || [],
+                                        guru: json.guru || [],
+                                        kelas: json.kelas || [],
+                                        mapel: json.mapel || [],
+                                        ekskulRef: json.ekskulRef || [],
+                                        nilaiMapel: json.nilaiMapel || [],
+                                        nilaiEkskul: json.nilaiEkskul || [],
+                                        absensi: json.absensi || [],
+                                        logo: json.logo || SEED_DATA.logo
+                                    };
+                                    setData(safeData); 
+                                    notify("Data berhasil dipulihkan!", "success"); 
+                                } 
+                            } else { notify("Format file backup tidak valid.", "error"); } 
+                        } catch (err) { notify("Gagal membaca file backup.", "error"); } 
+                    }; reader.readAsText(file); event.target.value = null; 
+                };
                 return (<div className="space-y-6 animate-fade"><h2 className="text-2xl font-bold text-slate-800">Backup & Restore Data</h2><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-between"><div><div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4"><Icon name="download-cloud" size={24}/></div><h3 className="font-bold text-lg mb-2">Backup Data</h3><p className="text-slate-500 text-sm mb-6">Unduh seluruh data aplikasi untuk disimpan sebagai cadangan.</p></div><button onClick={handleBackup} className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition flex items-center justify-center gap-2"><Icon name="download" size={18}/> Download Backup</button></div><div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-between"><div><div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mb-4"><Icon name="upload-cloud" size={24}/></div><h3 className="font-bold text-lg mb-2">Restore Data</h3><p className="text-slate-500 text-sm mb-6">Pulihkan data aplikasi dari file backup JSON. <span className="text-red-500 font-bold">Data saat ini akan ditimpa!</span></p></div><input type="file" ref={fileInputRef} accept=".json" className="hidden" onChange={handleRestore} /><button onClick={() => fileInputRef.current.click()} className="w-full bg-emerald-600 text-white py-2 rounded-lg font-medium hover:bg-emerald-700 transition flex items-center justify-center gap-2"><Icon name="refresh-ccw" size={18}/> Restore Data</button></div></div></div>);
             };
 
@@ -914,10 +977,10 @@
             const saveData = () => {
                 const type = modal.type; 
                 updateData(prevData => {
-                    let updatedList = [...(type === 'ekskul' ? prevData.ekskulRef : prevData[type])]; let newUsers = [...prevData.users];
+                    let updatedList = [...(type === 'ekskul' ? (prevData.ekskulRef||[]) : (prevData[type]||[]))]; let newUsers = [...(prevData.users||[])];
                     if (modal.data) { 
-                        const idx = updatedList.findIndex(x => x.id === modal.data.id); updatedList[idx] = { ...updatedList[idx], ...formData };
-                        if (type === 'guru') { const updatedGuru = updatedList[idx]; newUsers = newUsers.map(u => { const isLinked = u.id === `usr-g-${modal.data.id}` || (u.nama === modal.data.nama && u.role === 'guru'); if (isLinked) { return { ...u, nama: updatedGuru.nama, nip: updatedGuru.nip }; } return u; }); }
+                        const idx = updatedList.findIndex(x => String(x.id) === String(modal.data.id)); updatedList[idx] = { ...updatedList[idx], ...formData };
+                        if (type === 'guru') { const updatedGuru = updatedList[idx]; newUsers = newUsers.map(u => { const isLinked = String(u.id) === `usr-g-${modal.data.id}` || (u.nama === modal.data.nama && u.role === 'guru'); if (isLinked) { return { ...u, nama: updatedGuru.nama, nip: updatedGuru.nip }; } return u; }); }
                     } else { updatedList.push({ id: Date.now(), ...formData }); }
                     const newState = { ...prevData };
                     if(type === 'ekskul') newState.ekskulRef = updatedList; else newState[type] = updatedList;
@@ -927,7 +990,7 @@
                 setModal({ show:false, type:'', data:null }); notify('Data berhasil disimpan');
             };
 
-            const deleteItem = (key, id) => { if(confirm('Hapus data ini?')) { updateData(prev => { const newState = { ...prev }; if(key === 'ekskulRef') newState.ekskulRef = prev.ekskulRef.filter(i => i.id !== id); else newState[key] = prev[key].filter(i => i.id !== id); return newState; }); notify('Data berhasil dihapus'); } };
+            const deleteItem = (key, id) => { if(confirm('Hapus data ini?')) { updateData(prev => { const newState = { ...prev }; if(key === 'ekskulRef') newState.ekskulRef = (prev.ekskulRef||[]).filter(i => String(i.id) !== String(id)); else newState[key] = (prev[key]||[]).filter(i => String(i.id) !== String(id)); return newState; }); notify('Data berhasil dihapus'); } };
             
             const renderContent = () => {
                 if (!data) return <div className="p-10 text-center">Memuat Data...</div>;
@@ -979,7 +1042,7 @@
                                         <label className="block text-sm font-medium text-slate-700 mb-1">Mata Pelajaran</label>
                                         <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={formData.mapel || ''} onChange={e => setFormData({...formData, mapel: e.target.value})}>
                                             <option value="">-- Pilih Mata Pelajaran --</option>
-                                            {data.mapel.sort((a,b) => a.nama.localeCompare(b.nama)).map(m => (<option key={m.id} value={m.nama}>{m.nama}</option>))}
+                                            {(data.mapel||[]).sort((a,b) => a.nama.localeCompare(b.nama)).map(m => (<option key={m.id} value={m.nama}>{m.nama}</option>))}
                                         </select>
                                     </div>
                                     <div className="mb-4">
@@ -988,14 +1051,14 @@
                                             <option value="-">Tidak Ada</option>
                                             <option value="Kepala Sekolah">Kepala Sekolah</option>
                                             <option value="Waka Akademik">Waka Akademik</option>
-                                            {data.kelas.map(k => (<option key={k.id} value={`Wali Kelas ${k.nama}`}>Wali Kelas {k.nama}</option>))}
+                                            {(data.kelas||[]).map(k => (<option key={k.id} value={`Wali Kelas ${k.nama}`}>Wali Kelas {k.nama}</option>))}
                                         </select>
                                     </div>
-                                    <ClassSelector label="Kelas Mengajar" availableClasses={data.kelas} selectedClasses={formData.kelasMengajar} onChange={v=>setFormData({...formData,kelasMengajar:v})}/>
+                                    <ClassSelector label="Kelas Mengajar" availableClasses={data.kelas||[]} selectedClasses={formData.kelasMengajar} onChange={v=>setFormData({...formData,kelasMengajar:v})}/>
                                 </>
                              )}
                              
-                             {modal.type === 'mapel' && <><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/><FormInput label="Kelompok" value={formData.kelompok} onChange={v=>setFormData({...formData,kelompok:v})}/><ClassSelector label="Diajarkan di Kelas" availableClasses={data.kelas} selectedClasses={formData.kelas} onChange={v=>setFormData({...formData,kelas:v})}/></>}
+                             {modal.type === 'mapel' && <><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/><FormInput label="Kelompok" value={formData.kelompok} onChange={v=>setFormData({...formData,kelompok:v})}/><ClassSelector label="Diajarkan di Kelas" availableClasses={data.kelas||[]} selectedClasses={formData.kelas} onChange={v=>setFormData({...formData,kelas:v})}/></>}
                              {modal.type === 'kelas' && <><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/><FormInput label="Jurusan" value={formData.jurusan} onChange={v=>setFormData({...formData,jurusan:v})}/></>}
                              {modal.type === 'ekskul' && <FormInput label="Nama Kegiatan" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/>}
                              <button onClick={saveData} className="w-full bg-secondary text-white py-2 rounded font-bold mt-4">Simpan</button>
@@ -1004,7 +1067,7 @@
                     <div className="print-only fixed inset-0 bg-white z-[9999]">{printQueue.map(s => <PrintRapor key={s.id} data={data} siswa={s} />)}</div>
                     
                     <aside className={`bg-primary text-slate-300 w-64 flex flex-col shadow-2xl transition-all duration-300 no-print ${sidebarOpen ? 'translate-x-0' : '-translate-x-64 absolute h-full z-40'}`}>
-                        <div className="h-16 flex items-center px-6 font-bold text-xl tracking-tight text-white border-b border-slate-700">{data.logo.image ? (<img src={data.logo.image} className="h-8 w-auto mr-2 object-contain" alt="Logo" onError={(e) => e.target.style.display = 'none'} />) : (<span className="text-secondary mr-1">e</span>)} Rapor<span className="font-light opacity-50 ml-1">Pro</span></div>
+                        <div className="h-16 flex items-center px-6 font-bold text-xl tracking-tight text-white border-b border-slate-700">{(data.logo||{}).image ? (<img src={data.logo.image} className="h-8 w-auto mr-2 object-contain" alt="Logo" onError={(e) => e.target.style.display = 'none'} />) : (<span className="text-secondary mr-1">e</span>)} Rapor<span className="font-light opacity-50 ml-1">Pro</span></div>
                         <div className="flex-1 overflow-y-auto py-6 space-y-1">
                             <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Main</div>
                             <button onClick={()=>handleMenuClick('dashboard')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='dashboard' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="grid"/> Dashboard</button>
@@ -1064,7 +1127,7 @@
                             <button onClick={()=>setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition"><Icon name="menu"/></button>
                             <div className="flex items-center gap-4">
                                 <span className="text-sm text-slate-500 hidden md:block">
-                                    {data?.sekolah?.nama || 'Loading...'} 
+                                    {(data?.sekolah || {}).nama || 'Loading...'} 
                                     <span className="ml-3 px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-md text-xs font-bold text-blue-700">
                                         {activeSemester?.semester} {activeSemester?.tahun}
                                     </span>
