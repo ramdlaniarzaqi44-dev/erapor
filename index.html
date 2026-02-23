@@ -600,9 +600,19 @@
                     Object.keys(buffer).forEach(key => {
                         const [siswaId, field] = key.split('-');
                         const idx = updatedNilai.findIndex(n => n.siswa_id === parseInt(siswaId) && n.mapel_id === parseInt(selMapel));
-                        const val = parseInt(buffer[key]) || 0;
-                        if(idx > -1) updatedNilai[idx] = { ...updatedNilai[idx], [field]: val };
-                        else updatedNilai.push({ siswa_id: parseInt(siswaId), mapel_id: parseInt(selMapel), s1:0,s2:0,s3:0,s4:0,s5:0,sts:0,sas:0,psaj_praktik:0,psaj_tulis:0, [field]: val });
+                        
+                        // PERBAIKAN: Mengganti dan menimpa nilai secara mutlak, termasuk saat dikosongkan
+                        let val = buffer[key];
+                        if (val !== '') {
+                            val = parseInt(val);
+                            if (isNaN(val)) val = '';
+                        }
+
+                        if(idx > -1) {
+                            updatedNilai[idx] = { ...updatedNilai[idx], [field]: val };
+                        } else {
+                            updatedNilai.push({ siswa_id: parseInt(siswaId), mapel_id: parseInt(selMapel), s1:'',s2:'',s3:'',s4:'',s5:'',sts:'',sas:'',psaj_praktik:'',psaj_tulis:'', [field]: val });
+                        }
                     });
                     return { ...prevData, nilaiMapel: updatedNilai };
                 });
