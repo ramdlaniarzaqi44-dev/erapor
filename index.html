@@ -592,14 +592,22 @@
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
 
+            // Deteksi otomatis apakah ini kelas 12
+            const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
+
             const handleSave = () => {
                 if(!selMapel) return notify('Pilih Mapel dulu', 'error');
                 setData((prevData) => {
                     const updatedNilai = [...(prevData.nilaiMapel || [])];
+                    const studentsInClass = (prevData.siswa || []).filter(s => s.kelas === selKelas);
+
                     Object.keys(buffer).forEach(key => {
                         const parts = key.split('-');
                         const siswaIdStr = parts[0];
                         const field = parts.slice(1).join('-');
+
+                        // Mencegah input/buffer nilai STS untuk kelas 12
+                        if (isKelas12 && field === 'sts') return; 
 
                         const idx = updatedNilai.findIndex(n => String(n.siswa_id) === String(siswaIdStr) && String(n.mapel_id) === String(selMapel));
                         
@@ -612,23 +620,39 @@
                         if(idx > -1) {
                             // SECARA EKSPLISIT MENIMPA (OVERWRITE) DATA LAMA, BUKAN AKUMULASI (+=)
                             updatedNilai[idx] = { ...updatedNilai[idx], [field]: val };
+                            if (isKelas12) updatedNilai[idx].sts = ''; // Hapus nilai STS jika ada di database
                         } else {
                             const sId = isNaN(Number(siswaIdStr)) ? siswaIdStr : Number(siswaIdStr);
                             const mId = isNaN(Number(selMapel)) ? selMapel : Number(selMapel);
                             updatedNilai.push({ siswa_id: sId, mapel_id: mId, s1:'',s2:'',s3:'',s4:'',s5:'',sts:'',sas:'',psaj_praktik:'',psaj_tulis:'', [field]: val });
                         }
                     });
+
+                    // Pastikan semua siswa di kelas 12 pada mapel ini nilai STS-nya terhapus (Force Clean)
+                    if (isKelas12) {
+                        studentsInClass.forEach(s => {
+                            const idx = updatedNilai.findIndex(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel));
+                            if (idx > -1) updatedNilai[idx].sts = '';
+                        });
+                    }
+
                     return { ...prevData, nilaiMapel: updatedNilai };
                 });
                 setBuffer({}); notify('Nilai berhasil disimpan (Nilai lama tertimpa)!', 'success');
             };
 
-            const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
             const downloadTemplateNilai = () => { 
                 const siswaKelas = (data.siswa || []).filter(s => s.kelas === selKelas); if (siswaKelas.length === 0) return notify('Tidak ada siswa', 'error');
-                const headers = [['NO', 'NOMOR INDUK', 'NAMA', 'S1', 'S2', 'S3', 'S4', 'S5', 'STS', 'SAS']];
-                if (isKelas12) headers[0].push('PSAJ PRAKTIK', 'PSAJ TULIS');
-                const rows = siswaKelas.map((s, i) => { const row = [i + 1, s.nisn, s.nama, '', '', '', '', '', '', '']; if (isKelas12) row.push('', ''); return row; });
+                
+                const headers = isKelas12 
+                    ? [['NO', 'NOMOR INDUK', 'NAMA', 'S1', 'S2', 'S3', 'S4', 'S5', 'SAS', 'PSAJ PRAKTIK', 'PSAJ TULIS']]
+                    : [['NO', 'NOMOR INDUK', 'NAMA', 'S1', 'S2', 'S3', 'S4', 'S5', 'STS', 'SAS']];
+                
+                const rows = siswaKelas.map((s, i) => { 
+                    return isKelas12 
+                        ? [i + 1, s.nisn, s.nama, '', '', '', '', '', '', '', '']
+                        : [i + 1, s.nisn, s.nama, '', '', '', '', '', '', '']; 
+                });
                 const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]); XLSX.utils.book_append_sheet(wb, ws, "Nilai"); XLSX.writeFile(wb, `Nilai_${selKelas}.xlsx`);
             };
 
@@ -652,7 +676,12 @@
                             
                             if (siswa) {
                                 let hasUpdates = false;
-                                ['S1','S2','S3','S4','S5','STS','SAS','PSAJ PRAKTIK','PSAJ TULIS'].forEach(field => {
+                                
+                                let fieldsToImport = isKelas12 
+                                    ? ['S1','S2','S3','S4','S5','SAS','PSAJ PRAKTIK','PSAJ TULIS'] 
+                                    : ['S1','S2','S3','S4','S5','STS','SAS'];
+
+                                fieldsToImport.forEach(field => {
                                     let val = row[field];
                                     if (val === undefined) val = row[field.toLowerCase()];
                                     
@@ -669,6 +698,7 @@
                                         if(idx > -1) {
                                             // Menimpa nilai mutlak via Import Excel
                                             updatedNilai[idx] = { ...updatedNilai[idx], [mapField]: parsedVal };
+                                            if (isKelas12) updatedNilai[idx].sts = ''; // Force clean STS untuk kelas 12
                                         } else {
                                             const sId = isNaN(Number(sIdStr)) ? sIdStr : Number(sIdStr);
                                             const mId = isNaN(Number(mIdStr)) ? mIdStr : Number(mIdStr);
@@ -698,7 +728,7 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Akademik</h2><div className="flex gap-2">{selKelas && selMapel && (<><button onClick={downloadTemplateNilai} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Format</button><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="upload" size={16}/> Import</button><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={importNilai} /></>)}<button onClick={handleSave} className="bg-accent text-white px-4 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm"><Icon name="save" size={16}/> Simpan</button></div></div>
                     <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5','STS','SAS'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}<th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined ? nilai[f] : ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? sumatif.reduce((a,b)=>a+b,0)/sumatif.length : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = Math.round((rerata + sts + sas) / 3); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5','sts','sas'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}<td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
+                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}{!isKelas12 && <th className="p-2 text-center w-16">STS</th>}<th className="p-2 text-center w-16">SAS</th><th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined ? nilai[f] : ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? sumatif.reduce((a,b)=>a+b,0)/sumatif.length : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts + sas) / 3); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}{!isKelas12 && <td className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sts')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sts`]: e.target.value}))}/></td>}<td className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sas')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sas`]: e.target.value}))}/></td><td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
                 </div>
             )
         };
@@ -807,8 +837,10 @@
                 return (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
             }, [user, data.guru]);
 
+            // EXACT MATCH Mengajar
             const filteredKelas = useMemo(() => { if (!currentGuru) return data.kelas || []; return (data.kelas || []).filter(k => (currentGuru.kelasMengajar || []).includes(k.nama)); }, [data.kelas, currentGuru]);
             
+            // EXACT MATCH Mapel & Kelas
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
@@ -827,7 +859,7 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Leger Nilai</h2><button onClick={downloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Download Excel</button></div>
                     <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th><th className="p-3 w-16">STS</th><th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const sts = parseInt(val.sts) || 0; const sas = parseInt(val.sas) || 0; const akhir = Math.round((rerata + sts + sas) / 3); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td><td className="p-3">{val.sts||'-'}</td><td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
+                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th>{!isKelas12 && <th className="p-3 w-16">STS</th>}<th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const sts = parseInt(val.sts) || 0; const sas = parseInt(val.sas) || 0; const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts + sas) / 3); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td>{!isKelas12 && <td className="p-3">{val.sts||'-'}</td>}<td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
                 </div>
             );
         };
@@ -861,6 +893,9 @@
             const { sekolah, mapel, nilaiMapel, ekskulRef, nilaiEkskul, absensi, logo } = data;
             const myAbsen = (absensi || []).find(a => String(a.siswa_id) === String(siswa.id)) || {sakit:'',izin:'',alpa:''};
             const waliKelasName = ((logo || {}).wali_kelas_per_kelas && (logo || {}).wali_kelas_per_kelas[siswa.kelas]) || (logo || {}).wali_kelas || "Wali Kelas";
+            
+            const isKelas12 = siswa.kelas && (siswa.kelas.toUpperCase().startsWith('XII') || siswa.kelas.startsWith('12'));
+
             const calcScore = (val) => {
                  if(!val) return { rerata:'', akhir:'', predikat:'-' };
                  const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0);
@@ -869,7 +904,7 @@
                  if (rerata === '' && !val.sts) return { rerata:'', akhir:'', predikat:'-' };
                  
                  const realRerata = rerata === '' ? 0 : rerata;
-                 const akhir = Math.round((realRerata + (parseInt(val.sts)||0)) / 2);
+                 const akhir = isKelas12 ? realRerata : Math.round((realRerata + (parseInt(val.sts)||0)) / 2);
                  let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C';
                  return { rerata, akhir, predikat };
             };
@@ -878,18 +913,18 @@
             const renderRow = (m) => {
                 const val = (nilaiMapel || []).find(n => String(n.siswa_id) === String(siswa.id) && String(n.mapel_id) === String(m.id)) || {}; 
                 const score = calcScore(val);
-                return (<tr key={m.id}><td className="text-center">{m.urutan}</td><td className="pl-1 truncate max-w-[150px]">{m.nama}</td><td className="text-center">{m.kkm}</td><td className="text-center">{val.s1||'-'}</td><td className="text-center">{val.s2||'-'}</td><td className="text-center">{val.s3||'-'}</td><td className="text-center">{val.s4||'-'}</td><td className="text-center">{val.s5||'-'}</td><td className="text-center font-bold bg-white">{score.rerata||''}</td><td className="text-center">{val.sts||'-'}</td><td className="text-center font-bold bg-white">{score.akhir||''}</td><td className="text-center">{score.predikat}</td></tr>);
+                return (<tr key={m.id}><td className="text-center">{m.urutan}</td><td className="pl-1 truncate max-w-[150px]">{m.nama}</td><td className="text-center">{m.kkm}</td><td className="text-center">{val.s1||'-'}</td><td className="text-center">{val.s2||'-'}</td><td className="text-center">{val.s3||'-'}</td><td className="text-center">{val.s4||'-'}</td><td className="text-center">{val.s5||'-'}</td><td className="text-center font-bold bg-white">{score.rerata||''}</td>{!isKelas12 && <td className="text-center">{val.sts||'-'}</td>}<td className="text-center font-bold bg-white">{score.akhir||''}</td><td className="text-center">{score.predikat}</td></tr>);
             };
             const renderGroupWithHeader = (grp, title) => {
                 const groupItems = sortedMapel.filter(m => m.kelompok === grp); if (groupItems.length === 0) return null; 
-                return (<React.Fragment key={grp}><tr className="font-bold"><td colSpan="12" className="pl-2 py-0.5 text-[11px]">{title}</td></tr>{groupItems.map(m => { if (m.parent) { if (!processedParents.has(m.parent)) { processedParents.add(m.parent); return <React.Fragment key={`grp-${m.parent}`}><tr className="bg-white font-bold italic"><td colSpan="12" className="pl-2 py-0.5 text-[11px]">{m.parent}</td></tr>{renderRow(m)}</React.Fragment>; } return renderRow(m); } return renderRow(m); })}</React.Fragment>);
+                return (<React.Fragment key={grp}><tr className="font-bold"><td colSpan={isKelas12 ? "11" : "12"} className="pl-2 py-0.5 text-[11px]">{title}</td></tr>{groupItems.map(m => { if (m.parent) { if (!processedParents.has(m.parent)) { processedParents.add(m.parent); return <React.Fragment key={`grp-${m.parent}`}><tr className="bg-white font-bold italic"><td colSpan={isKelas12 ? "11" : "12"} className="pl-2 py-0.5 text-[11px]">{m.parent}</td></tr>{renderRow(m)}</React.Fragment>; } return renderRow(m); } return renderRow(m); })}</React.Fragment>);
             };
             const myEkskulList = (nilaiEkskul || []).filter(n => String(n.siswa_id) === String(siswa.id)).map(n => { const ref = (ekskulRef || []).find(e => String(e.id) === String(n.ekskul_id)); return { nama: ref?.nama || '-', predikat: n.predikat }; });
             return (
                 <div className="w-full h-full bg-white text-black p-0 page-break relative text-[11pt]">
                     <div className="flex items-center justify-between border-b-4 border-double border-black pb-2 mb-2"><div className="w-16 h-16 flex items-center justify-center font-bold text-center text-xs">{(logo || {}).image ? (<img src={logo.image} alt="Logo" className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />) : "LOGO"}</div><div className="text-center flex-1"><h1 className="font-bold text-lg uppercase leading-tight">LAPORAN HASIL BELAJAR TENGAH SEMESTER</h1><h2 className="font-bold text-md">{(sekolah || {}).nama}</h2><p className="text-[11px]">{(sekolah || {}).alamat}</p></div><div className="w-16"></div></div>
                     <div className="flex justify-between mb-2 text-[11px] font-sans"><table className="w-[60%]"><tbody><tr><td className="w-24">Nama</td><td className="w-2">:</td><td className="font-bold uppercase">{siswa.nama}</td></tr><tr><td>Nomor Induk</td><td>:</td><td>{siswa.nisn}</td></tr><tr><td>Kelas</td><td>:</td><td>{siswa.kelas} / {siswa.fase}</td></tr></tbody></table><table className="w-[35%]"><tbody><tr><td className="w-24">Tahun Ajaran</td><td className="w-2">:</td><td>{(sekolah || {}).tahunPelajaran}</td></tr><tr><td>Semester</td><td>:</td><td>{(sekolah || {}).semester}</td></tr></tbody></table></div>
-                    <h3 className="font-bold mb-0.5 text-[12px] underline">A. Nilai Akademik</h3><table className="print-table mb-2"><thead className="text-center font-bold"><tr><th rowSpan="2" className="w-6">No</th><th rowSpan="2">Mata Pelajaran</th><th rowSpan="2" className="w-8">KKM</th><th colSpan="5" className="h-4">Sumatif</th><th rowSpan="2" className="w-8">Rata</th><th rowSpan="2" className="w-8">STS</th><th rowSpan="2" className="w-8">Akhir</th><th rowSpan="2" className="w-8">Pred</th></tr><tr className="text-[11px]"><th className="w-6">1</th><th className="w-6">2</th><th className="w-6">3</th><th className="w-6">4</th><th className="w-6">5</th></tr></thead><tbody>{renderGroupWithHeader('A', 'Kelompok A (Umum)')}{renderGroupWithHeader('B', 'Kelompok B (Muatan Lokal)')}{renderGroupWithHeader('C', 'Kelompok C (Peminatan)')}</tbody></table>
+                    <h3 className="font-bold mb-0.5 text-[12px] underline">A. Nilai Akademik</h3><table className="print-table mb-2"><thead className="text-center font-bold"><tr><th rowSpan="2" className="w-6">No</th><th rowSpan="2">Mata Pelajaran</th><th rowSpan="2" className="w-8">KKM</th><th colSpan="5" className="h-4">Sumatif</th><th rowSpan="2" className="w-8">Rata</th>{!isKelas12 && <th rowSpan="2" className="w-8">STS</th>}<th rowSpan="2" className="w-8">Akhir</th><th rowSpan="2" className="w-8">Pred</th></tr><tr className="text-[11px]"><th className="w-6">1</th><th className="w-6">2</th><th className="w-6">3</th><th className="w-6">4</th><th className="w-6">5</th></tr></thead><tbody>{renderGroupWithHeader('A', 'Kelompok A (Umum)')}{renderGroupWithHeader('B', 'Kelompok B (Muatan Lokal)')}{renderGroupWithHeader('C', 'Kelompok C (Peminatan)')}</tbody></table>
                     <div className="flex gap-2 mb-4"><div className="flex-1"><h3 className="font-bold mb-0.5 text-[12px] underline">B. Ekstrakurikuler</h3><table className="print-table w-full"><thead className=""><tr><th className="w-6">No</th><th>Kegiatan</th><th className="w-12">Predikat</th></tr></thead><tbody>{myEkskulList.length > 0 ? myEkskulList.map((e,i)=>(<tr key={i}><td className="text-center">{i+1}</td><td className="pl-2">{e.nama}</td><td className="text-center">{e.predikat}</td></tr>)) : <tr><td colSpan="3" className="text-center">-</td></tr>}</tbody></table></div><div className="w-[35%]"><h3 className="font-bold mb-0.5 text-[12px] underline">C. Ketidakhadiran</h3><table className="print-table w-full"><tbody><tr><td>Sakit</td><td className="text-center w-12">{myAbsen.sakit || '-'}</td><td>Hari</td></tr><tr><td>Izin</td><td className="text-center">{myAbsen.izin || '-'}</td><td>Hari</td></tr><tr><td>Tanpa Ket.</td><td className="text-center">{myAbsen.alpa || '-'}</td><td>Hari</td></tr></tbody></table></div></div>
                     <div className="flex justify-between mt-2 px-8 text-center text-[12px]"><div><p className="mb-10">Mengetahui,<br/>Orang Tua/Wali</p><p className="border-b border-black w-40 mx-auto"></p></div><div><p className="mb-10">{(logo || {}).kota}, {(logo || {}).tgl_rapor}<br/>Wali Kelas</p><p className="font-bold underline">{waliKelasName}</p><p>NIP. -</p></div></div>
                 </div>
