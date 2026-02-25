@@ -570,7 +570,7 @@
             );
         };
 
-        const InputNilai = ({ data, setData, notify, user }) => {
+        const InputNilai = ({ data, setData, notify, user, updateData }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState(''); const [buffer, setBuffer] = useState({}); const fileInputRef = useRef(null);
 
             const currentGuru = useMemo(() => {
@@ -605,11 +605,12 @@
                         
                         let val = buffer[key];
                         if (val !== '') {
-                            val = parseInt(val);
+                            val = parseInt(val, 10); // Menjamin konversi angka mutlak menimpa string
                             if (isNaN(val)) val = '';
                         }
 
                         if(idx > -1) {
+                            // SECARA EKSPLISIT MENIMPA (OVERWRITE) DATA LAMA, BUKAN AKUMULASI (+=)
                             updatedNilai[idx] = { ...updatedNilai[idx], [field]: val };
                         } else {
                             const sId = isNaN(Number(siswaIdStr)) ? siswaIdStr : Number(siswaIdStr);
@@ -619,7 +620,7 @@
                     });
                     return { ...prevData, nilaiMapel: updatedNilai };
                 });
-                setBuffer({}); notify('Nilai berhasil disimpan!', 'success');
+                setBuffer({}); notify('Nilai berhasil disimpan (Nilai lama tertimpa)!', 'success');
             };
 
             const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
@@ -635,21 +636,61 @@
                 const file = e.target.files[0]; if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    const bstr = evt.target.result; const wb = XLSX.read(bstr, { type: 'binary' }); const ws = wb.Sheets[wb.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(ws);
-                    const newBuffer = { ...buffer }; let count = 0;
-                    json.forEach(row => {
-                        const nisn = String(row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn']);
-                        const siswa = (data.siswa || []).find(s => String(s.nisn) === nisn);
-                        if (siswa) {
-                            ['S1','S2','S3','S4','S5','STS','SAS','PSAJ PRAKTIK','PSAJ TULIS'].forEach(field => {
-                                const val = row[field] || row[field.toLowerCase()];
-                                if (val !== undefined) { const mapField = field.toLowerCase().replace(' ', '_'); newBuffer[`${siswa.id}-${mapField}`] = val; }
-                            });
-                            count++;
-                        }
+                    const fileData = new Uint8Array(evt.target.result); 
+                    const wb = XLSX.read(fileData, { type: 'array' }); 
+                    const ws = wb.Sheets[wb.SheetNames[0]]; 
+                    const json = XLSX.utils.sheet_to_json(ws);
+                    
+                    updateData((prevData) => {
+                        const updatedNilai = [...(prevData.nilaiMapel || [])];
+                        let count = 0;
+                        json.forEach(row => {
+                            const rawNisn = row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn'];
+                            if (!rawNisn) return;
+                            const nisnStr = String(rawNisn).trim();
+                            const siswa = (prevData.siswa || []).find(s => String(s.nisn).trim() === nisnStr);
+                            
+                            if (siswa) {
+                                let hasUpdates = false;
+                                ['S1','S2','S3','S4','S5','STS','SAS','PSAJ PRAKTIK','PSAJ TULIS'].forEach(field => {
+                                    let val = row[field];
+                                    if (val === undefined) val = row[field.toLowerCase()];
+                                    
+                                    if (val !== undefined) { 
+                                        const mapField = field.toLowerCase().replace(' ', '_'); 
+                                        const sIdStr = String(siswa.id);
+                                        const mIdStr = String(selMapel);
+                                        
+                                        const idx = updatedNilai.findIndex(n => String(n.siswa_id) === sIdStr && String(n.mapel_id) === mIdStr);
+                                        
+                                        let parsedVal = val !== '' ? parseInt(val, 10) : '';
+                                        if (isNaN(parsedVal) && parsedVal !== '') parsedVal = '';
+
+                                        if(idx > -1) {
+                                            // Menimpa nilai mutlak via Import Excel
+                                            updatedNilai[idx] = { ...updatedNilai[idx], [mapField]: parsedVal };
+                                        } else {
+                                            const sId = isNaN(Number(sIdStr)) ? sIdStr : Number(sIdStr);
+                                            const mId = isNaN(Number(mIdStr)) ? mIdStr : Number(mIdStr);
+                                            updatedNilai.push({ 
+                                                siswa_id: sId, mapel_id: mId, 
+                                                s1:'',s2:'',s3:'',s4:'',s5:'',sts:'',sas:'',psaj_praktik:'',psaj_tulis:'', 
+                                                [mapField]: parsedVal 
+                                            });
+                                        }
+                                        hasUpdates = true;
+                                    }
+                                });
+                                if (hasUpdates) count++;
+                            }
+                        });
+                        notify(`Berhasil mengimpor dan menyimpan nilai untuk ${count} siswa (Nilai lama tertimpa).`, 'success');
+                        return { ...prevData, nilaiMapel: updatedNilai };
                     });
-                    setBuffer(newBuffer); notify(`Berhasil membaca nilai untuk ${count} siswa. Klik Simpan.`, 'success');
-                }; reader.readAsBinaryString(file); e.target.value = null;
+                    setBuffer({}); // Clear buffer so visual uses latest DB data
+                }; 
+                reader.readAsArrayBuffer(file); 
+                e.target.value = null;
             };
 
             const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
@@ -657,7 +698,7 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Akademik</h2><div className="flex gap-2">{selKelas && selMapel && (<><button onClick={downloadTemplateNilai} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Format</button><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="upload" size={16}/> Import</button><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={importNilai} /></>)}<button onClick={handleSave} className="bg-accent text-white px-4 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm"><Icon name="save" size={16}/> Simpan</button></div></div>
                     <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5','STS','SAS'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}<th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] || ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? sumatif.reduce((a,b)=>a+b,0)/sumatif.length : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = Math.round((rerata + sts + sas) / 3); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5','sts','sas'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}<td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
+                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5','STS','SAS'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}<th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined ? nilai[f] : ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? sumatif.reduce((a,b)=>a+b,0)/sumatif.length : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = Math.round((rerata + sts + sas) / 3); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5','sts','sas'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}<td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
                 </div>
             )
         };
@@ -732,7 +773,7 @@
                         const idx = updatedAbsensi.findIndex(a => String(a.siswa_id) === String(siswaIdStr)); 
                         let val = buffer[key]; 
                         if (val !== '') {
-                            val = parseInt(val);
+                            val = parseInt(val, 10);
                             if (isNaN(val)) val = '';
                         }
                         
@@ -752,7 +793,7 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Ketidakhadiran</h2><button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold"><Icon name="save"/> Simpan</button></div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{availableClasses.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select></div>
-                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Nama Siswa</th><th className="p-3 w-32 text-center">Sakit (Hari)</th><th className="p-3 w-32 text-center">Izin (Hari)</th><th className="p-3 w-32 text-center">Alpa (Hari)</th></tr></thead><tbody className="divide-y">{students.map(s => { const absen = (data.absensi || []).find(a => String(a.siswa_id) === String(s.id)) || {sakit:'',izin:'',alpa:''}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : absen[f]; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{s.nama}</td>{['sakit','izin','alpa'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-20 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input absensi.</div>}
+                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Nama Siswa</th><th className="p-3 w-32 text-center">Sakit (Hari)</th><th className="p-3 w-32 text-center">Izin (Hari)</th><th className="p-3 w-32 text-center">Alpa (Hari)</th></tr></thead><tbody className="divide-y">{students.map(s => { const absen = (data.absensi || []).find(a => String(a.siswa_id) === String(s.id)) || {sakit:'',izin:'',alpa:''}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (absen[f] !== undefined ? absen[f] : ''); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{s.nama}</td>{['sakit','izin','alpa'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-20 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input absensi.</div>}
                 </div>
             )
         };
@@ -911,6 +952,11 @@
                 return currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase() === 'waka akademik'; 
             }, [currentGuru]);
 
+            const isPanitiaSumatif = useMemo(() => { 
+                if (!currentGuru) return false; 
+                return currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase() === 'panitia sumatif'; 
+            }, [currentGuru]);
+
             const notify = (message, type='success') => setNotification({message, type});
             const handleLogout = () => { if(confirm('Yakin ingin keluar?')) { setUser(null); setPage('dashboard'); } };
             const handlePrint = (studentList) => { if (studentList.length === 0) return notify('Tidak ada siswa di kelas ini', 'error'); setPrintQueue(studentList); setTimeout(() => window.print(), 500); };
@@ -946,7 +992,6 @@
                             const json = JSON.parse(e.target.result); 
                             if (json.sekolah && json.users && json.siswa) { 
                                 if(confirm("Apakah Anda yakin ingin memulihkan data? Data saat ini akan ditimpa!")) { 
-                                    // PENTING: Penyelamatan array kosong agar tidak terjadi undefined / crash pada file backup lama
                                     const safeData = {
                                         ...SEED_DATA,
                                         ...json,
@@ -1006,12 +1051,12 @@
                     case 'kelas': return <TableView title="Data Kelas" heads={['Nama','Tingkat','Jurusan']} data={data.kelas} searchKeys={['nama']} renderRow={i=><><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.tingkat}</td><td className="p-4">{i.jurusan}</td></>} onAdd={()=>openModal('kelas')} onEdit={d=>openModal('kelas',d)} onDelete={id=>deleteItem('kelas', id)} />;
                     case 'referensi_ekskul': return <TableView title="Data Ekstrakurikuler" heads={['Nama Kegiatan']} data={data.ekskulRef} searchKeys={['nama']} renderRow={i=><td className="p-4 font-medium">{i.nama}</td>} onAdd={()=>openModal('ekskul')} onEdit={d=>openModal('ekskul',d)} onDelete={id=>deleteItem('ekskulRef', id)} />;
                     case 'mapping': return <MappingRapor dataMapel={data.mapel} classList={data.kelas} setData={updateData} notify={notify} />;
-                    case 'input_nilai': return user.role !== 'siswa' ? <InputNilai data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center">Akses Ditolak</div>;
+                    case 'input_nilai': return user.role !== 'siswa' ? <InputNilai data={data} setData={updateData} updateData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center">Akses Ditolak</div>;
                     case 'input_absensi': return (user.role === 'admin' || isWalas) ? <InputAbsensi data={data} setData={updateData} notify={notify} user={user} currentGuru={currentGuru} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'input_ekskul': return (user.role === 'admin' || isWalas) ? <InputEkskul data={data} setData={updateData} notify={notify} user={user} currentGuru={currentGuru} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'cetak_leger': return <CetakLeger data={data} notify={notify} user={user} />;
                     case 'cetak': return (user.role === 'admin' || isWalas) ? <CetakRaporSisipan data={data} handlePrint={handlePrint} user={user} currentGuru={currentGuru} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
-                    case 'monitoring': return (user?.role === 'admin' || isKepsek || isWakaAkademik) ? <MonitoringNilai data={data} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Pimpinan/Admin</div>;
+                    case 'monitoring': return (user?.role === 'admin' || isKepsek || isWakaAkademik || isPanitiaSumatif) ? <MonitoringNilai data={data} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Pimpinan/Admin/Panitia</div>;
                     case 'manajemen_semester': return user?.role === 'admin' ? <ManajemenSemester data={data} activeSemester={activeSemester} notify={notify} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Admin</div>;
                     case 'backup_restore': return user?.role === 'admin' ? <BackupRestore data={data} setData={updateData} notify={notify} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Admin</div>;
                     default: return <div>Halaman tidak ditemukan</div>;
@@ -1051,6 +1096,7 @@
                                             <option value="-">Tidak Ada</option>
                                             <option value="Kepala Sekolah">Kepala Sekolah</option>
                                             <option value="Waka Akademik">Waka Akademik</option>
+                                            <option value="Panitia Sumatif">Panitia Sumatif</option>
                                             {(data.kelas||[]).map(k => (<option key={k.id} value={`Wali Kelas ${k.nama}`}>Wali Kelas {k.nama}</option>))}
                                         </select>
                                     </div>
@@ -1107,7 +1153,7 @@
                                     </a>
                                 </>
                             )}
-                            {(user?.role === 'admin' || isKepsek || isWakaAkademik) && (
+                            {(user?.role === 'admin' || isKepsek || isWakaAkademik || isPanitiaSumatif) && (
                                 <>
                                     <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Monitoring</div>
                                     <button onClick={()=>handleMenuClick('monitoring')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='monitoring' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="bar-chart-2"/> Monitoring Nilai</button>
