@@ -571,29 +571,29 @@
         const InputNilai = ({ data, setData, notify, user, updateData }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState(''); const [buffer, setBuffer] = useState({}); const fileInputRef = useRef(null);
 
-            // PERBAIKAN: LOGIKA FILTER STRICT (KETAT) BERBASIS MULTI-PROFILE
+            // PERBAIKAN: LOGIKA FILTER STRICT (KETAT) BERBASIS MULTI-PROFILE DAN ANTI-BUG NIP KOSONG
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
                 
-                // 1. Cari profil utama (Primary Match)
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { 
                     const id = user.id.replace('usr-g-', ''); 
                     primaryMatch = (data.guru || []).find(g => String(g.id) === String(id)); 
                 }
-                if (!primaryMatch && user.nip) { 
+                if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { 
                     primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); 
                 }
-                if (!primaryMatch) { 
-                    primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); 
+                if (!primaryMatch && user.nama) { 
+                    primaryMatch = (data.guru || []).find(g => g.nama && String(g.nama).trim().toLowerCase() === String(user.nama).trim().toLowerCase()); 
                 }
 
                 if (!primaryMatch) return [];
 
-                // 2. Ambil SEMUA data guru yang memiliki Nama atau NIP yang sama (untuk yang mengampu >1 Mapel)
                 return (data.guru || []).filter(g => {
-                    const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
-                    const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                    const hasValidNip = primaryMatch.nip && String(primaryMatch.nip).trim() !== '-' && String(primaryMatch.nip).trim() !== '';
+                    const sameNip = hasValidNip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                    const hasValidName = primaryMatch.nama && String(primaryMatch.nama).trim() !== '';
+                    const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase();
                     return sameNip || sameName;
                 });
             }, [user, data.guru]);
@@ -601,15 +601,12 @@
             // Filter Kelas: Hanya tampilkan kelas yang terdaftar di profil guru
             const filteredKelas = useMemo(() => {
                 if (user.role === 'admin') return data.kelas || [];
-                
-                // Kumpulkan semua kelas dari semua profil guru yang cocok
                 const myClasses = new Set();
                 guruProfiles.forEach(g => {
                     if (Array.isArray(g.kelasMengajar)) {
                         g.kelasMengajar.forEach(c => myClasses.add(c));
                     }
                 });
-                
                 return (data.kelas || []).filter(k => myClasses.has(k.nama));
             }, [data.kelas, guruProfiles, user.role]);
             
@@ -617,22 +614,15 @@
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 
-                // 1. Filter dasar: Mapel harus aktif di kelas tersebut (berdasarkan setting Data Mapel)
                 if (selKelas) {
                     mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
                 }
                 
-                // 2. Filter Guru: Mapel harus ada di profil guru yang mengajar kelas tersebut
                 if (user.role !== 'admin') {
-                    if (!selKelas) return []; // Jangan tampilkan mapel jika belum pilih kelas
+                    if (!selKelas) return [];
 
-                    // Cari profil guru yang spesifik mengajar di kelas yang dipilih
                     const relevantProfiles = guruProfiles.filter(g => (g.kelasMengajar || []).includes(selKelas));
-                    
-                    // Ambil nama mapel hanya dari profil yang relevan
                     const myMapels = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
-                    
-                    // Filter mapel yang namanya cocok
                     mapels = mapels.filter(m => myMapels.includes(m.nama.trim().toLowerCase()));
                 }
 
@@ -775,24 +765,24 @@
             )
         };
 
-        const InputEkskul = ({ data, setData, notify, user, currentGuru }) => { 
+        const InputEkskul = ({ data, setData, notify, user }) => { 
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
             
-            // EXACT MATCH WALAS & MULTI PROFILE
             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
                 
-                // Cari semua profil guru yang cocok (nama/NIP sama)
                 let profiles = [];
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
-                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
-                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
+                if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch && user.nama) { primaryMatch = (data.guru || []).find(g => g.nama && String(g.nama).trim().toLowerCase() === String(user.nama).trim().toLowerCase()); }
 
                 if (primaryMatch) {
                     profiles = (data.guru || []).filter(g => {
-                        const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
-                        const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                        const hasValidNip = primaryMatch.nip && String(primaryMatch.nip).trim() !== '-' && String(primaryMatch.nip).trim() !== '';
+                        const sameNip = hasValidNip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                        const hasValidName = primaryMatch.nama && String(primaryMatch.nama).trim() !== '';
+                        const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase();
                         return sameNip || sameName;
                     });
                 }
@@ -844,24 +834,24 @@
             );
         };
 
-        const InputAbsensi = ({ data, setData, notify, user, currentGuru }) => {
+        const InputAbsensi = ({ data, setData, notify, user }) => {
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
             
-            // EXACT MATCH WALAS & MULTI PROFILE
-             const availableClasses = useMemo(() => { 
+            const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
                 
-                // Cari semua profil guru yang cocok (nama/NIP sama)
                 let profiles = [];
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
-                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
-                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
+                if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch && user.nama) { primaryMatch = (data.guru || []).find(g => g.nama && String(g.nama).trim().toLowerCase() === String(user.nama).trim().toLowerCase()); }
 
                 if (primaryMatch) {
                     profiles = (data.guru || []).filter(g => {
-                        const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
-                        const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                        const hasValidNip = primaryMatch.nip && String(primaryMatch.nip).trim() !== '-' && String(primaryMatch.nip).trim() !== '';
+                        const sameNip = hasValidNip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                        const hasValidName = primaryMatch.nama && String(primaryMatch.nama).trim() !== '';
+                        const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase();
                         return sameNip || sameName;
                     });
                 }
@@ -921,17 +911,19 @@
         const CetakLeger = ({ data, notify, user }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState('');
 
-            // PERBAIKAN LOGIKA LEGER: Menggunakan Logika Strict yang sama dengan InputNilai
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { const id = user.id.replace('usr-g-', ''); primaryMatch = (data.guru || []).find(g => String(g.id) === String(id)); }
-                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
-                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
+                if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch && user.nama) { primaryMatch = (data.guru || []).find(g => g.nama && String(g.nama).trim().toLowerCase() === String(user.nama).trim().toLowerCase()); }
+                
                 if (!primaryMatch) return [];
                 return (data.guru || []).filter(g => {
-                    const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
-                    const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                    const hasValidNip = primaryMatch.nip && String(primaryMatch.nip).trim() !== '-' && String(primaryMatch.nip).trim() !== '';
+                    const sameNip = hasValidNip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                    const hasValidName = primaryMatch.nama && String(primaryMatch.nama).trim() !== '';
+                    const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase();
                     return sameNip || sameName;
                 });
             }, [user, data.guru]);
@@ -972,24 +964,24 @@
             );
         };
 
-        const CetakRaporSisipan = ({ data, handlePrint, user, currentGuru }) => {
+        const CetakRaporSisipan = ({ data, handlePrint, user }) => {
             const [selKelas, setSelKelas] = useState(''); 
             
-            // EXACT MATCH WALAS & MULTI PROFILE
             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
                 
-                // Cari semua profil guru yang cocok (nama/NIP sama)
                 let profiles = [];
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
-                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
-                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
+                if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch && user.nama) { primaryMatch = (data.guru || []).find(g => g.nama && String(g.nama).trim().toLowerCase() === String(user.nama).trim().toLowerCase()); }
 
                 if (primaryMatch) {
                     profiles = (data.guru || []).filter(g => {
-                        const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
-                        const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                        const hasValidNip = primaryMatch.nip && String(primaryMatch.nip).trim() !== '-' && String(primaryMatch.nip).trim() !== '';
+                        const sameNip = hasValidNip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                        const hasValidName = primaryMatch.nama && String(primaryMatch.nama).trim() !== '';
+                        const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase();
                         return sameNip || sameName;
                     });
                 }
@@ -1097,32 +1089,37 @@
                 }
             }, [fbData, pendingLogin, loading]);
 
-            const currentGuru = useMemo(() => {
-                if (!user || user.role !== 'guru' || !data) return null;
-                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = (data.guru || []).find(g => String(g.id) === String(guruId)); if (byId) return byId; }
-                if (user.nip) { const byNip = (data.guru || []).find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
-                return (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
+            // EVALUASI AKSES GURU
+            const { isWalas, isKepsek, isWakaAkademik, isPanitiaSumatif } = useMemo(() => {
+                let w = false, k = false, a = false, p = false;
+                if (!user || user.role !== 'guru' || !data) return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p };
+
+                let primaryMatch = null;
+                if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
+                if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch && user.nama) { primaryMatch = (data.guru || []).find(g => g.nama && String(g.nama).trim().toLowerCase() === String(user.nama).trim().toLowerCase()); }
+
+                if (primaryMatch) {
+                    const profiles = (data.guru || []).filter(g => {
+                        const hasValidNip = primaryMatch.nip && String(primaryMatch.nip).trim() !== '-' && String(primaryMatch.nip).trim() !== '';
+                        const sameNip = hasValidNip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                        const hasValidName = primaryMatch.nama && String(primaryMatch.nama).trim() !== '';
+                        const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase();
+                        return sameNip || sameName;
+                    });
+                    
+                    profiles.forEach(g => {
+                        if (g.tugasTambahan) {
+                            const task = g.tugasTambahan.toLowerCase();
+                            if (task.includes('wali kelas')) w = true;
+                            if (task === 'kepala sekolah') k = true;
+                            if (task === 'waka akademik') a = true;
+                            if (task === 'panitia sumatif') p = true;
+                        }
+                    });
+                }
+                return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p };
             }, [user, data]);
-
-            const isWalas = useMemo(() => { 
-                if (!currentGuru) return false; 
-                return currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase().includes('wali kelas'); 
-            }, [currentGuru]);
-
-            const isKepsek = useMemo(() => { 
-                if (!currentGuru) return false; 
-                return currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase() === 'kepala sekolah'; 
-            }, [currentGuru]);
-
-            const isWakaAkademik = useMemo(() => { 
-                if (!currentGuru) return false; 
-                return currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase() === 'waka akademik'; 
-            }, [currentGuru]);
-
-            const isPanitiaSumatif = useMemo(() => { 
-                if (!currentGuru) return false; 
-                return currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase() === 'panitia sumatif'; 
-            }, [currentGuru]);
 
             const notify = (message, type='success') => setNotification({message, type});
             const handleLogout = () => { if(confirm('Yakin ingin keluar?')) { setUser(null); setPage('dashboard'); } };
@@ -1219,10 +1216,10 @@
                     case 'referensi_ekskul': return <TableView title="Data Ekstrakurikuler" heads={['Nama Kegiatan']} data={data.ekskulRef} searchKeys={['nama']} renderRow={i=><td className="p-4 font-medium">{i.nama}</td>} onAdd={()=>openModal('ekskul')} onEdit={d=>openModal('ekskul',d)} onDelete={id=>deleteItem('ekskulRef', id)} />;
                     case 'mapping': return <MappingRapor dataMapel={data.mapel} classList={data.kelas} setData={updateData} notify={notify} />;
                     case 'input_nilai': return user.role !== 'siswa' ? <InputNilai data={data} setData={updateData} updateData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center">Akses Ditolak</div>;
-                    case 'input_absensi': return (user.role === 'admin' || isWalas) ? <InputAbsensi data={data} setData={updateData} notify={notify} user={user} currentGuru={currentGuru} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
-                    case 'input_ekskul': return (user.role === 'admin' || isWalas) ? <InputEkskul data={data} setData={updateData} notify={notify} user={user} currentGuru={currentGuru} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
+                    case 'input_absensi': return (user.role === 'admin' || isWalas) ? <InputAbsensi data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
+                    case 'input_ekskul': return (user.role === 'admin' || isWalas) ? <InputEkskul data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'cetak_leger': return <CetakLeger data={data} notify={notify} user={user} />;
-                    case 'cetak': return (user.role === 'admin' || isWalas) ? <CetakRaporSisipan data={data} handlePrint={handlePrint} user={user} currentGuru={currentGuru} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
+                    case 'cetak': return (user.role === 'admin' || isWalas) ? <CetakRaporSisipan data={data} handlePrint={handlePrint} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'monitoring': return (user?.role === 'admin' || isKepsek || isWakaAkademik || isPanitiaSumatif) ? <MonitoringNilai data={data} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Pimpinan/Admin/Panitia</div>;
                     case 'manajemen_semester': return user?.role === 'admin' ? <ManajemenSemester data={data} activeSemester={activeSemester} notify={notify} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Admin</div>;
                     case 'backup_restore': return user?.role === 'admin' ? <BackupRestore data={data} setData={updateData} notify={notify} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Admin</div>;
