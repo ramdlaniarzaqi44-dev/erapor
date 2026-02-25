@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro v6.5 - SMAS AL-MULTAZAM</title>
+    <title>e-Rapor Pro v6.6 - SMAS AL-MULTAZAM</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -215,7 +215,7 @@
             return <span ref={wrapperRef} className="inline-flex items-center justify-center align-middle"><i data-lucide={name}></i></span>;
         };
 
-        // --- FIREBASE HOOK DENGAN DUKUNGAN MULTI-SEMESTER ---
+        // --- FIREBASE HOOK ---
         const useFirebaseData = (activeSemester) => {
             const [data, setData] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -373,7 +373,6 @@
                             <Icon name="info" className="shrink-0 mt-0.5" />
                             <p>Fitur ini digunakan untuk mempersiapkan <b>Tahun Ajaran/Semester Baru</b>. Sistem akan menyalin data master otomatis (Siswa, Guru, Mapel, Kelas, Akun) dari semester saat ini (<b>{activeSemester.semester} {activeSemester.tahun}</b>), dan akan <b>mengosongkan seluruh data nilai dan absensi</b> untuk digunakan di semester yang baru.</p>
                         </div>
-                        
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <div>
                                 <label className="block text-sm font-medium mb-1 text-slate-700">Tahun Ajaran Baru</label>
@@ -387,7 +386,6 @@
                                 </select>
                             </div>
                         </div>
-                        
                         <button onClick={handleCopy} disabled={isProcessing} className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-bold flex gap-2 transition disabled:opacity-50 items-center">
                             <Icon name={isProcessing ? "loader" : "copy"} className={isProcessing ? "animate-spin" : ""}/> 
                             {isProcessing ? 'Memproses Duplikasi...' : 'Buat Semester Baru'}
@@ -644,6 +642,8 @@
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
 
+            const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
+
             const handleSave = () => {
                 if(!selMapel) return notify('Pilih Mapel dulu', 'error');
                 setData((prevData) => {
@@ -655,21 +655,19 @@
                         const siswaIdStr = parts[0];
                         const field = parts.slice(1).join('-');
 
-                        // Mencegah input/buffer nilai STS untuk kelas 12
                         if (isKelas12 && field === 'sts') return; 
 
                         const idx = updatedNilai.findIndex(n => String(n.siswa_id) === String(siswaIdStr) && String(n.mapel_id) === String(selMapel));
                         
                         let val = buffer[key];
                         if (val !== '') {
-                            val = parseInt(val, 10); // Menjamin konversi angka mutlak menimpa string
+                            val = parseInt(val, 10); 
                             if (isNaN(val)) val = '';
                         }
 
                         if(idx > -1) {
-                            // SECARA EKSPLISIT MENIMPA (OVERWRITE) DATA LAMA, BUKAN AKUMULASI (+=)
                             updatedNilai[idx] = { ...updatedNilai[idx], [field]: val };
-                            if (isKelas12) updatedNilai[idx].sts = ''; // Hapus nilai STS jika ada di database
+                            if (isKelas12) updatedNilai[idx].sts = ''; 
                         } else {
                             const sId = isNaN(Number(siswaIdStr)) ? siswaIdStr : Number(siswaIdStr);
                             const mId = isNaN(Number(selMapel)) ? selMapel : Number(selMapel);
@@ -677,7 +675,6 @@
                         }
                     });
 
-                    // Pastikan semua siswa di kelas 12 pada mapel ini nilai STS-nya terhapus (Force Clean)
                     if (isKelas12) {
                         studentsInClass.forEach(s => {
                             const idx = updatedNilai.findIndex(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel));
@@ -692,11 +689,9 @@
 
             const downloadTemplateNilai = () => { 
                 const siswaKelas = (data.siswa || []).filter(s => s.kelas === selKelas); if (siswaKelas.length === 0) return notify('Tidak ada siswa', 'error');
-                
                 const headers = isKelas12 
                     ? [['NO', 'NOMOR INDUK', 'NAMA', 'S1', 'S2', 'S3', 'S4', 'S5', 'SAS', 'PSAJ PRAKTIK', 'PSAJ TULIS']]
                     : [['NO', 'NOMOR INDUK', 'NAMA', 'S1', 'S2', 'S3', 'S4', 'S5', 'STS', 'SAS']];
-                
                 const rows = siswaKelas.map((s, i) => { 
                     return isKelas12 
                         ? [i + 1, s.nisn, s.nama, '', '', '', '', '', '', '', '']
@@ -725,7 +720,6 @@
                             
                             if (siswa) {
                                 let hasUpdates = false;
-                                
                                 let fieldsToImport = isKelas12 
                                     ? ['S1','S2','S3','S4','S5','SAS','PSAJ PRAKTIK','PSAJ TULIS'] 
                                     : ['S1','S2','S3','S4','S5','STS','SAS'];
@@ -745,9 +739,8 @@
                                         if (isNaN(parsedVal) && parsedVal !== '') parsedVal = '';
 
                                         if(idx > -1) {
-                                            // Menimpa nilai mutlak via Import Excel
                                             updatedNilai[idx] = { ...updatedNilai[idx], [mapField]: parsedVal };
-                                            if (isKelas12) updatedNilai[idx].sts = ''; // Force clean STS untuk kelas 12
+                                            if (isKelas12) updatedNilai[idx].sts = ''; 
                                         } else {
                                             const sId = isNaN(Number(sIdStr)) ? sIdStr : Number(sIdStr);
                                             const mId = isNaN(Number(mIdStr)) ? mIdStr : Number(mIdStr);
@@ -766,7 +759,7 @@
                         notify(`Berhasil mengimpor dan menyimpan nilai untuk ${count} siswa (Nilai lama tertimpa).`, 'success');
                         return { ...prevData, nilaiMapel: updatedNilai };
                     });
-                    setBuffer({}); // Clear buffer so visual uses latest DB data
+                    setBuffer({}); 
                 }; 
                 reader.readAsArrayBuffer(file); 
                 e.target.value = null;
@@ -927,7 +920,7 @@
 
         const CetakLeger = ({ data, notify, user }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState('');
-            
+
             // PERBAIKAN LOGIKA LEGER: Menggunakan Logika Strict yang sama dengan InputNilai
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
