@@ -573,25 +573,75 @@
         const InputNilai = ({ data, setData, notify, user, updateData }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState(''); const [buffer, setBuffer] = useState({}); const fileInputRef = useRef(null);
 
-            const currentGuru = useMemo(() => {
-                if (user.role === 'admin') return null;
-                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = (data.guru || []).find(g => String(g.id) === String(guruId)); if (byId) return byId; }
-                if (user.nip) { const byNip = (data.guru || []).find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
-                return (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
+            // LOGIKA BARU: MULTI-PROFILE MATCHING
+            // Mengambil semua profil guru yang namanya/NIP-nya sama dengan user yang login
+            const guruProfiles = useMemo(() => {
+                if (user.role === 'admin') return [];
+                
+                let primaryMatch = null;
+                // 1. Cari match utama berdasarkan ID akun atau Nama
+                if (user.id && String(user.id).startsWith('usr-g-')) { 
+                    const id = user.id.replace('usr-g-', ''); 
+                    primaryMatch = (data.guru || []).find(g => String(g.id) === String(id)); 
+                }
+                if (!primaryMatch && user.nip) { 
+                    primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); 
+                }
+                if (!primaryMatch) { 
+                    primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); 
+                }
+
+                if (!primaryMatch) return [];
+
+                // 2. Cari semua saudara kembar data (profil lain dengan Nama/NIP sama)
+                return (data.guru || []).filter(g => {
+                    const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                    const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                    return sameNip || sameName;
+                });
             }, [user, data.guru]);
 
-            const filteredKelas = useMemo(() => { if (!currentGuru) return data.kelas || []; return (data.kelas || []).filter(k => (currentGuru.kelasMengajar || []).includes(k.nama)); }, [data.kelas, currentGuru]);
+            // Gabungkan semua kelas dari semua profil guru yang ditemukan
+            const allowedClasses = useMemo(() => {
+                if (user.role === 'admin') return (data.kelas || []).map(c => c.nama);
+                const classes = new Set();
+                guruProfiles.forEach(g => {
+                    if (Array.isArray(g.kelasMengajar)) g.kelasMengajar.forEach(c => classes.add(c));
+                });
+                return Array.from(classes);
+            }, [guruProfiles, user.role, data.kelas]);
+
+            // Gabungkan semua mapel dari semua profil guru yang ditemukan
+            const allowedMapels = useMemo(() => {
+                if (user.role === 'admin') return null; // Admin sees all
+                const mapels = new Set();
+                guruProfiles.forEach(g => {
+                    if (g.mapel) mapels.add(g.mapel.trim().toLowerCase());
+                });
+                return Array.from(mapels);
+            }, [guruProfiles, user.role]);
+
+            const filteredKelas = useMemo(() => { 
+                if (user.role === 'admin') return data.kelas || []; 
+                return (data.kelas || []).filter(k => allowedClasses.includes(k.nama)); 
+            }, [data.kelas, allowedClasses, user.role]);
             
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
-                if (currentGuru && currentGuru.mapel) mapels = mapels.filter(m => m.nama.trim().toLowerCase() === currentGuru.mapel.trim().toLowerCase());
+                
+                // Filter: Hanya tampilkan mapel yang dimiliki oleh salah satu profil guru ini
+                if (allowedMapels) {
+                    mapels = mapels.filter(m => allowedMapels.includes(m.nama.trim().toLowerCase()));
+                }
+                
                 return mapels.sort((a,b) => a.urutan - b.urutan);
-            }, [data.mapel, selKelas, currentGuru]);
+            }, [data.mapel, selKelas, allowedMapels]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
 
+            // ... (Sisa fungsi handleSave, isKelas12, downloadTemplate, importNilai sama seperti sebelumnya) ...
             // Deteksi otomatis apakah ini kelas 12
             const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
 
@@ -736,14 +786,38 @@
         const InputEkskul = ({ data, setData, notify, user, currentGuru }) => { 
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
             
+            // EXACT MATCH WALAS & MULTI PROFILE
             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
-                if (currentGuru && currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase().includes('wali kelas')) { 
-                    const walasClassName = currentGuru.tugasTambahan.replace(/wali kelas/i, '').trim();
-                    return (data.kelas || []).filter(k => k.nama === walasClassName); 
-                } 
+                
+                // Cari semua profil guru yang cocok (nama/NIP sama)
+                let profiles = [];
+                let primaryMatch = null;
+                if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
+                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
+
+                if (primaryMatch) {
+                    profiles = (data.guru || []).filter(g => {
+                        const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                        const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                        return sameNip || sameName;
+                    });
+                }
+
+                const walasClasses = new Set();
+                profiles.forEach(g => {
+                    if (g.tugasTambahan && g.tugasTambahan.toLowerCase().includes('wali kelas')) {
+                         const walasClassName = g.tugasTambahan.replace(/wali kelas/i, '').trim();
+                         walasClasses.add(walasClassName);
+                    }
+                });
+
+                if (walasClasses.size > 0) {
+                     return (data.kelas || []).filter(k => walasClasses.has(k.nama));
+                }
                 return []; 
-            }, [data.kelas, user, currentGuru]);
+            }, [data.kelas, user, data.guru]);
 
             useEffect(() => { if (availableClasses.length === 1 && !selKelas) { setSelKelas(availableClasses[0].nama); } }, [availableClasses, selKelas]);
             const getVal = (siswaId, slotIdx, field) => { const key = `${siswaId}-${slotIdx}-${field}`; if (buffer[key] !== undefined) return buffer[key]; const studentEkskuls = (data.nilaiEkskul || []).filter(n => String(n.siswa_id) === String(siswaId)); return studentEkskuls[slotIdx] ? studentEkskuls[slotIdx][field === 'id' ? 'ekskul_id' : 'predikat'] : ''; };
@@ -781,14 +855,38 @@
         const InputAbsensi = ({ data, setData, notify, user, currentGuru }) => {
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
             
-            const availableClasses = useMemo(() => { 
+            // EXACT MATCH WALAS & MULTI PROFILE
+             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
-                if (currentGuru && currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase().includes('wali kelas')) { 
-                    const walasClassName = currentGuru.tugasTambahan.replace(/wali kelas/i, '').trim();
-                    return (data.kelas || []).filter(k => k.nama === walasClassName); 
-                } 
+                
+                // Cari semua profil guru yang cocok (nama/NIP sama)
+                let profiles = [];
+                let primaryMatch = null;
+                if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
+                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
+
+                if (primaryMatch) {
+                    profiles = (data.guru || []).filter(g => {
+                        const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                        const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                        return sameNip || sameName;
+                    });
+                }
+
+                const walasClasses = new Set();
+                profiles.forEach(g => {
+                    if (g.tugasTambahan && g.tugasTambahan.toLowerCase().includes('wali kelas')) {
+                         const walasClassName = g.tugasTambahan.replace(/wali kelas/i, '').trim();
+                         walasClasses.add(walasClassName);
+                    }
+                });
+
+                if (walasClasses.size > 0) {
+                     return (data.kelas || []).filter(k => walasClasses.has(k.nama));
+                }
                 return []; 
-            }, [data.kelas, user, currentGuru]);
+            }, [data.kelas, user, data.guru]);
 
             useEffect(() => { if (availableClasses.length === 1 && !selKelas) { setSelKelas(availableClasses[0].nama); } }, [availableClasses, selKelas]);
             const handleSave = () => {
@@ -830,23 +928,63 @@
 
         const CetakLeger = ({ data, notify, user }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState('');
-            const currentGuru = useMemo(() => {
-                if (user.role === 'admin') return null;
-                if (user.id && String(user.id).startsWith('usr-g-')) { const guruId = user.id.replace('usr-g-', ''); const byId = (data.guru || []).find(g => String(g.id) === String(guruId)); if (byId) return byId; }
-                if (user.nip) { const byNip = (data.guru || []).find(g => g.nip && String(g.nip).trim() === String(user.nip).trim()); if (byNip) return byNip; }
-                return (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase());
+
+            // LOGIKA BARU: MULTI-PROFILE MATCHING (Sama seperti InputNilai)
+            const guruProfiles = useMemo(() => {
+                if (user.role === 'admin') return [];
+                
+                let primaryMatch = null;
+                if (user.id && String(user.id).startsWith('usr-g-')) { 
+                    const id = user.id.replace('usr-g-', ''); 
+                    primaryMatch = (data.guru || []).find(g => String(g.id) === String(id)); 
+                }
+                if (!primaryMatch && user.nip) { 
+                    primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); 
+                }
+                if (!primaryMatch) { 
+                    primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); 
+                }
+
+                if (!primaryMatch) return [];
+
+                return (data.guru || []).filter(g => {
+                    const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                    const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                    return sameNip || sameName;
+                });
             }, [user, data.guru]);
 
-            // EXACT MATCH Mengajar
-            const filteredKelas = useMemo(() => { if (!currentGuru) return data.kelas || []; return (data.kelas || []).filter(k => (currentGuru.kelasMengajar || []).includes(k.nama)); }, [data.kelas, currentGuru]);
+            const allowedClasses = useMemo(() => {
+                if (user.role === 'admin') return (data.kelas || []).map(c => c.nama);
+                const classes = new Set();
+                guruProfiles.forEach(g => {
+                    if (Array.isArray(g.kelasMengajar)) g.kelasMengajar.forEach(c => classes.add(c));
+                });
+                return Array.from(classes);
+            }, [guruProfiles, user.role, data.kelas]);
+
+            const allowedMapels = useMemo(() => {
+                if (user.role === 'admin') return null;
+                const mapels = new Set();
+                guruProfiles.forEach(g => {
+                    if (g.mapel) mapels.add(g.mapel.trim().toLowerCase());
+                });
+                return Array.from(mapels);
+            }, [guruProfiles, user.role]);
+
+            const filteredKelas = useMemo(() => { 
+                if (user.role === 'admin') return data.kelas || []; 
+                return (data.kelas || []).filter(k => allowedClasses.includes(k.nama)); 
+            }, [data.kelas, allowedClasses, user.role]);
             
-            // EXACT MATCH Mapel & Kelas
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
-                if (currentGuru && currentGuru.mapel) mapels = mapels.filter(m => m.nama.trim().toLowerCase() === currentGuru.mapel.trim().toLowerCase());
+                if (allowedMapels) {
+                    mapels = mapels.filter(m => allowedMapels.includes(m.nama.trim().toLowerCase()));
+                }
                 return mapels.sort((a,b) => a.urutan - b.urutan);
-            }, [data.mapel, selKelas, currentGuru]);
+            }, [data.mapel, selKelas, allowedMapels]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
@@ -867,14 +1005,38 @@
         const CetakRaporSisipan = ({ data, handlePrint, user, currentGuru }) => {
             const [selKelas, setSelKelas] = useState(''); 
             
+            // EXACT MATCH WALAS & MULTI PROFILE
             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
-                if (currentGuru && currentGuru.tugasTambahan && currentGuru.tugasTambahan.toLowerCase().includes('wali kelas')) { 
-                    const walasClassName = currentGuru.tugasTambahan.replace(/wali kelas/i, '').trim();
-                    return (data.kelas || []).filter(k => k.nama === walasClassName); 
-                } 
+                
+                // Cari semua profil guru yang cocok (nama/NIP sama)
+                let profiles = [];
+                let primaryMatch = null;
+                if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
+                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
+
+                if (primaryMatch) {
+                    profiles = (data.guru || []).filter(g => {
+                        const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
+                        const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
+                        return sameNip || sameName;
+                    });
+                }
+
+                const walasClasses = new Set();
+                profiles.forEach(g => {
+                    if (g.tugasTambahan && g.tugasTambahan.toLowerCase().includes('wali kelas')) {
+                         const walasClassName = g.tugasTambahan.replace(/wali kelas/i, '').trim();
+                         walasClasses.add(walasClassName);
+                    }
+                });
+
+                if (walasClasses.size > 0) {
+                     return (data.kelas || []).filter(k => walasClasses.has(k.nama));
+                }
                 return []; 
-            }, [data.kelas, user, currentGuru]);
+            }, [data.kelas, user, data.guru]);
 
             useEffect(() => { if (availableClasses.length === 1 && !selKelas) { setSelKelas(availableClasses[0].nama); } }, [availableClasses, selKelas]);
             const students = useMemo(() => selKelas ? (data.siswa || []).filter(s => s.kelas === selKelas) : [], [data.siswa, selKelas]);
