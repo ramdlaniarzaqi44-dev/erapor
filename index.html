@@ -574,12 +574,10 @@
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState(''); const [buffer, setBuffer] = useState({}); const fileInputRef = useRef(null);
 
             // LOGIKA BARU: MULTI-PROFILE MATCHING
-            // Mengambil semua profil guru yang namanya/NIP-nya sama dengan user yang login
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
                 
                 let primaryMatch = null;
-                // 1. Cari match utama berdasarkan ID akun atau Nama
                 if (user.id && String(user.id).startsWith('usr-g-')) { 
                     const id = user.id.replace('usr-g-', ''); 
                     primaryMatch = (data.guru || []).find(g => String(g.id) === String(id)); 
@@ -593,7 +591,6 @@
 
                 if (!primaryMatch) return [];
 
-                // 2. Cari semua saudara kembar data (profil lain dengan Nama/NIP sama)
                 return (data.guru || []).filter(g => {
                     const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
                     const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
@@ -601,7 +598,7 @@
                 });
             }, [user, data.guru]);
 
-            // Gabungkan semua kelas dari semua profil guru yang ditemukan
+            // Filter Kelas: Gabungan semua kelas dari semua profil guru
             const allowedClasses = useMemo(() => {
                 if (user.role === 'admin') return (data.kelas || []).map(c => c.nama);
                 const classes = new Set();
@@ -611,37 +608,39 @@
                 return Array.from(classes);
             }, [guruProfiles, user.role, data.kelas]);
 
-            // Gabungkan semua mapel dari semua profil guru yang ditemukan
-            const allowedMapels = useMemo(() => {
-                if (user.role === 'admin') return null; // Admin sees all
-                const mapels = new Set();
-                guruProfiles.forEach(g => {
-                    if (g.mapel) mapels.add(g.mapel.trim().toLowerCase());
-                });
-                return Array.from(mapels);
-            }, [guruProfiles, user.role]);
-
             const filteredKelas = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
                 return (data.kelas || []).filter(k => allowedClasses.includes(k.nama)); 
             }, [data.kelas, allowedClasses, user.role]);
             
+            // STRICT FILTER MAPEL: Hanya tampilkan mapel yang diajarkan guru DI KELAS YANG DIPILIH
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
-                if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
                 
-                // Filter: Hanya tampilkan mapel yang dimiliki oleh salah satu profil guru ini
-                if (allowedMapels) {
-                    mapels = mapels.filter(m => allowedMapels.includes(m.nama.trim().toLowerCase()));
+                // 1. Filter dasar: Mapel harus tersedia di kelas tersebut (setting Data Mapel)
+                if (selKelas) {
+                    mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
+                }
+                
+                // 2. Filter Guru (STRICT): Mapel harus ada di profil guru yang mengajar kelas tersebut
+                if (user.role !== 'admin') {
+                    if (!selKelas) return []; // Jika belum pilih kelas, jangan tampilkan mapel apapun
+
+                    // Cari profil guru yang mengandung kelas yang dipilih
+                    const relevantProfiles = guruProfiles.filter(g => (g.kelasMengajar || []).includes(selKelas));
+                    
+                    // Kumpulkan nama mapel dari profil-profil yang relevan saja
+                    const myMapelsInThisClass = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
+                    
+                    mapels = mapels.filter(m => myMapelsInThisClass.includes(m.nama.trim().toLowerCase()));
                 }
                 
                 return mapels.sort((a,b) => a.urutan - b.urutan);
-            }, [data.mapel, selKelas, allowedMapels]);
+            }, [data.mapel, selKelas, guruProfiles, user.role]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
 
-            // ... (Sisa fungsi handleSave, isKelas12, downloadTemplate, importNilai sama seperti sebelumnya) ...
             // Deteksi otomatis apakah ini kelas 12
             const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
 
@@ -963,28 +962,30 @@
                 return Array.from(classes);
             }, [guruProfiles, user.role, data.kelas]);
 
-            const allowedMapels = useMemo(() => {
-                if (user.role === 'admin') return null;
-                const mapels = new Set();
-                guruProfiles.forEach(g => {
-                    if (g.mapel) mapels.add(g.mapel.trim().toLowerCase());
-                });
-                return Array.from(mapels);
-            }, [guruProfiles, user.role]);
-
             const filteredKelas = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
                 return (data.kelas || []).filter(k => allowedClasses.includes(k.nama)); 
             }, [data.kelas, allowedClasses, user.role]);
             
+            // STRICT FILTER MAPEL LEGER
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
-                if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
-                if (allowedMapels) {
-                    mapels = mapels.filter(m => allowedMapels.includes(m.nama.trim().toLowerCase()));
+                
+                if (selKelas) {
+                    mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
                 }
+                
+                if (user.role !== 'admin') {
+                    if (!selKelas) return [];
+
+                    const relevantProfiles = guruProfiles.filter(g => (g.kelasMengajar || []).includes(selKelas));
+                    const myMapelsInThisClass = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
+                    
+                    mapels = mapels.filter(m => myMapelsInThisClass.includes(m.nama.trim().toLowerCase()));
+                }
+                
                 return mapels.sort((a,b) => a.urutan - b.urutan);
-            }, [data.mapel, selKelas, allowedMapels]);
+            }, [data.mapel, selKelas, guruProfiles, user.role]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
