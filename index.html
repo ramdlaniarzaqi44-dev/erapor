@@ -573,10 +573,11 @@
         const InputNilai = ({ data, setData, notify, user, updateData }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState(''); const [buffer, setBuffer] = useState({}); const fileInputRef = useRef(null);
 
-            // LOGIKA BARU: MULTI-PROFILE MATCHING
+            // PERBAIKAN: LOGIKA FILTER STRICT (KETAT) BERBASIS MULTI-PROFILE
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
                 
+                // 1. Cari profil utama (Primary Match)
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { 
                     const id = user.id.replace('usr-g-', ''); 
@@ -591,6 +592,7 @@
 
                 if (!primaryMatch) return [];
 
+                // 2. Ambil SEMUA data guru yang memiliki Nama atau NIP yang sama (untuk yang mengampu >1 Mapel)
                 return (data.guru || []).filter(g => {
                     const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
                     const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
@@ -598,51 +600,49 @@
                 });
             }, [user, data.guru]);
 
-            // Filter Kelas: Gabungan semua kelas dari semua profil guru
-            const allowedClasses = useMemo(() => {
-                if (user.role === 'admin') return (data.kelas || []).map(c => c.nama);
-                const classes = new Set();
+            // Filter Kelas: Hanya tampilkan kelas yang terdaftar di profil guru
+            const filteredKelas = useMemo(() => {
+                if (user.role === 'admin') return data.kelas || [];
+                
+                // Kumpulkan semua kelas dari semua profil guru yang cocok
+                const myClasses = new Set();
                 guruProfiles.forEach(g => {
-                    if (Array.isArray(g.kelasMengajar)) g.kelasMengajar.forEach(c => classes.add(c));
+                    if (Array.isArray(g.kelasMengajar)) {
+                        g.kelasMengajar.forEach(c => myClasses.add(c));
+                    }
                 });
-                return Array.from(classes);
-            }, [guruProfiles, user.role, data.kelas]);
-
-            const filteredKelas = useMemo(() => { 
-                if (user.role === 'admin') return data.kelas || []; 
-                return (data.kelas || []).filter(k => allowedClasses.includes(k.nama)); 
-            }, [data.kelas, allowedClasses, user.role]);
+                
+                return (data.kelas || []).filter(k => myClasses.has(k.nama));
+            }, [data.kelas, guruProfiles, user.role]);
             
-            // STRICT FILTER MAPEL: Hanya tampilkan mapel yang diajarkan guru DI KELAS YANG DIPILIH
+            // Filter Mapel: SANGAT KETAT berdasarkan Kelas yang dipilih
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 
-                // 1. Filter dasar: Mapel harus tersedia di kelas tersebut (setting Data Mapel)
+                // 1. Filter dasar: Mapel harus aktif di kelas tersebut (berdasarkan setting Data Mapel)
                 if (selKelas) {
                     mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
                 }
                 
-                // 2. Filter Guru (STRICT): Mapel harus ada di profil guru yang mengajar kelas tersebut
+                // 2. Filter Guru: Mapel harus ada di profil guru yang mengajar kelas tersebut
                 if (user.role !== 'admin') {
-                    if (!selKelas) return []; // Jika belum pilih kelas, jangan tampilkan mapel apapun
+                    if (!selKelas) return []; // Jangan tampilkan mapel jika belum pilih kelas
 
-                    // Cari profil guru yang mengandung kelas yang dipilih
+                    // Cari profil guru yang spesifik mengajar di kelas yang dipilih
                     const relevantProfiles = guruProfiles.filter(g => (g.kelasMengajar || []).includes(selKelas));
                     
-                    // Kumpulkan nama mapel dari profil-profil yang relevan saja
-                    const myMapelsInThisClass = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
+                    // Ambil nama mapel hanya dari profil yang relevan
+                    const myMapels = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
                     
-                    mapels = mapels.filter(m => myMapelsInThisClass.includes(m.nama.trim().toLowerCase()));
+                    // Filter mapel yang namanya cocok
+                    mapels = mapels.filter(m => myMapels.includes(m.nama.trim().toLowerCase()));
                 }
-                
+
                 return mapels.sort((a,b) => a.urutan - b.urutan);
             }, [data.mapel, selKelas, guruProfiles, user.role]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
-
-            // Deteksi otomatis apakah ini kelas 12
-            const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
 
             const handleSave = () => {
                 if(!selMapel) return notify('Pilih Mapel dulu', 'error');
@@ -927,25 +927,15 @@
 
         const CetakLeger = ({ data, notify, user }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState('');
-
-            // LOGIKA BARU: MULTI-PROFILE MATCHING (Sama seperti InputNilai)
+            
+            // PERBAIKAN LOGIKA LEGER: Menggunakan Logika Strict yang sama dengan InputNilai
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
-                
                 let primaryMatch = null;
-                if (user.id && String(user.id).startsWith('usr-g-')) { 
-                    const id = user.id.replace('usr-g-', ''); 
-                    primaryMatch = (data.guru || []).find(g => String(g.id) === String(id)); 
-                }
-                if (!primaryMatch && user.nip) { 
-                    primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); 
-                }
-                if (!primaryMatch) { 
-                    primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); 
-                }
-
+                if (user.id && String(user.id).startsWith('usr-g-')) { const id = user.id.replace('usr-g-', ''); primaryMatch = (data.guru || []).find(g => String(g.id) === String(id)); }
+                if (!primaryMatch && user.nip) { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
+                if (!primaryMatch) { primaryMatch = (data.guru || []).find(g => g.nama && user.nama && g.nama.trim().toLowerCase() === user.nama.trim().toLowerCase()); }
                 if (!primaryMatch) return [];
-
                 return (data.guru || []).filter(g => {
                     const sameNip = primaryMatch.nip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim();
                     const sameName = g.nama && primaryMatch.nama && g.nama.trim().toLowerCase() === primaryMatch.nama.trim().toLowerCase();
@@ -953,37 +943,23 @@
                 });
             }, [user, data.guru]);
 
-            const allowedClasses = useMemo(() => {
-                if (user.role === 'admin') return (data.kelas || []).map(c => c.nama);
-                const classes = new Set();
-                guruProfiles.forEach(g => {
-                    if (Array.isArray(g.kelasMengajar)) g.kelasMengajar.forEach(c => classes.add(c));
-                });
-                return Array.from(classes);
-            }, [guruProfiles, user.role, data.kelas]);
-
-            const filteredKelas = useMemo(() => { 
-                if (user.role === 'admin') return data.kelas || []; 
-                return (data.kelas || []).filter(k => allowedClasses.includes(k.nama)); 
-            }, [data.kelas, allowedClasses, user.role]);
+            const filteredKelas = useMemo(() => {
+                if (user.role === 'admin') return data.kelas || [];
+                const myClasses = new Set();
+                guruProfiles.forEach(g => { if (Array.isArray(g.kelasMengajar)) g.kelasMengajar.forEach(c => myClasses.add(c)); });
+                return (data.kelas || []).filter(k => myClasses.has(k.nama));
+            }, [data.kelas, guruProfiles, user.role]);
             
-            // STRICT FILTER MAPEL LEGER
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
-                
-                if (selKelas) {
-                    mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
-                }
+                if (selKelas) mapels = mapels.filter(m => m.kelas && m.kelas.includes(selKelas));
                 
                 if (user.role !== 'admin') {
                     if (!selKelas) return [];
-
                     const relevantProfiles = guruProfiles.filter(g => (g.kelasMengajar || []).includes(selKelas));
-                    const myMapelsInThisClass = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
-                    
-                    mapels = mapels.filter(m => myMapelsInThisClass.includes(m.nama.trim().toLowerCase()));
+                    const myMapels = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
+                    mapels = mapels.filter(m => myMapels.includes(m.nama.trim().toLowerCase()));
                 }
-                
                 return mapels.sort((a,b) => a.urutan - b.urutan);
             }, [data.mapel, selKelas, guruProfiles, user.role]);
 
