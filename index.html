@@ -240,11 +240,8 @@
                     if (docSnap.exists()) {
                         setData(docSnap.data());
                     } else {
-                        const initData = {
-                            ...SEED_DATA,
-                            sekolah: { ...SEED_DATA.sekolah, tahunPelajaran: activeSemester.tahun, semester: activeSemester.semester }
-                        };
-                        window.setDoc(docRef, initData).then(() => setData(initData));
+                        // PERBAIKAN: Tidak menginisialisasi langsung jika database kosong. Melainkan memberi status flag.
+                        setData({ _isEmpty: true });
                     }
                     setLoading(false);
                 }, (error) => {
@@ -505,7 +502,6 @@
                         students.forEach(s => {
                             const gradeRecord = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelId));
                             if (gradeRecord) {
-                                // Define 'filled' if at least one grade field has a value > 0
                                 const hasGrade = ['s1','s2','s3','s4','s5','sts','sas'].some(k => parseInt(gradeRecord[k]) > 0);
                                 if (hasGrade) filledStudents++;
                             }
@@ -571,7 +567,6 @@
         const InputNilai = ({ data, setData, notify, user, updateData }) => {
             const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState(''); const [buffer, setBuffer] = useState({}); const fileInputRef = useRef(null);
 
-            // PERBAIKAN: LOGIKA FILTER STRICT (KETAT) BERBASIS MULTI-PROFILE DAN ANTI-BUG NIP KOSONG
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
                 
@@ -598,7 +593,6 @@
                 });
             }, [user, data.guru]);
 
-            // Filter Kelas: Hanya tampilkan kelas yang terdaftar di profil guru
             const filteredKelas = useMemo(() => {
                 if (user.role === 'admin') return data.kelas || [];
                 const myClasses = new Set();
@@ -610,7 +604,6 @@
                 return (data.kelas || []).filter(k => myClasses.has(k.nama));
             }, [data.kelas, guruProfiles, user.role]);
             
-            // Filter Mapel: SANGAT KETAT berdasarkan Kelas yang dipilih
             const availableMapel = useMemo(() => {
                 let mapels = (data.mapel || []).filter(m => m.aktif !== false);
                 
@@ -1072,11 +1065,35 @@
             const [formData, setFormData] = useState({});
 
             // Sync FB Data
-            useEffect(() => { if (fbData) setData(fbData); }, [fbData, setData]);
+            useEffect(() => { if (fbData && !fbData._isEmpty) setData(fbData); }, [fbData, setData]);
 
-            // Validate login safely when semester data is fully fetched
+            // Validate login & Admin Protected Initialization
             useEffect(() => {
                 if (pendingLogin && fbData && !loading) {
+                    if (fbData._isEmpty) {
+                        if (pendingLogin.username === 'admin' && pendingLogin.password === '123') {
+                            if (confirm(`Database untuk ${pendingLogin.tahun} - ${pendingLogin.semester} masih kosong.\n\nSebagai Admin, apakah Anda ingin menginisialisasi database ini dengan data bawaan (SEED DATA)?`)) {
+                                const initData = {
+                                    ...SEED_DATA,
+                                    sekolah: { ...SEED_DATA.sekolah, tahunPelajaran: pendingLogin.tahun, semester: pendingLogin.semester }
+                                };
+                                updateData(initData).then(() => {
+                                    setPendingLogin(null);
+                                    setUser(initData.users.find(u => u.username === 'admin'));
+                                    notify(`Berhasil menginisialisasi dan masuk ke ${pendingLogin.tahun} - ${pendingLogin.semester}`);
+                                    setLoginError('');
+                                });
+                                return;
+                            } else {
+                                setLoginError('Inisialisasi dibatalkan oleh Admin.');
+                            }
+                        } else {
+                            setLoginError('Semester ini belum dibuat/kosong. Hubungi Admin untuk membuat semester baru via Manajemen Semester!');
+                        }
+                        setPendingLogin(null);
+                        return;
+                    }
+
                     const found = (fbData.users || []).find(u => u.username === pendingLogin.username && u.password === pendingLogin.password);
                     if (found) {
                         setUser(found);
@@ -1089,10 +1106,9 @@
                 }
             }, [fbData, pendingLogin, loading]);
 
-            // EVALUASI AKSES GURU
             const { isWalas, isKepsek, isWakaAkademik, isPanitiaSumatif } = useMemo(() => {
                 let w = false, k = false, a = false, p = false;
-                if (!user || user.role !== 'guru' || !data) return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p };
+                if (!user || user.role !== 'guru' || !data || data._isEmpty) return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p };
 
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
@@ -1122,7 +1138,12 @@
             }, [user, data]);
 
             const notify = (message, type='success') => setNotification({message, type});
-            const handleLogout = () => { if(confirm('Yakin ingin keluar?')) { setUser(null); setPage('dashboard'); } };
+            const handleLogout = (force = false) => { 
+                if(force === true || confirm('Yakin ingin keluar?')) { 
+                    setUser(null); 
+                    setPage('dashboard'); 
+                } 
+            };
             const handlePrint = (studentList) => { if (studentList.length === 0) return notify('Tidak ada siswa di kelas ini', 'error'); setPrintQueue(studentList); setTimeout(() => window.print(), 500); };
             const handleMenuClick = (targetPage) => { setPage(targetPage); if (window.innerWidth < 1024) setSidebarOpen(false); };
             
@@ -1203,6 +1224,10 @@
             
             const renderContent = () => {
                 if (!data) return <div className="p-10 text-center">Memuat Data...</div>;
+                if (data._isEmpty) {
+                    setTimeout(() => handleLogout(true), 0);
+                    return <div className="p-10 text-center text-red-500 font-bold">Database Kosong / Terhapus. Harap Login ulang.</div>;
+                }
 
                 switch(page) {
                     case 'dashboard': return <Dashboard data={data} />;
@@ -1329,7 +1354,7 @@
                                 <button onClick={() => handleMenuClick('backup_restore')} className="w-full mb-3 text-slate-400 hover:text-white text-sm flex items-center gap-3 px-2 py-1 rounded hover:bg-slate-700 transition"><Icon name="database" size={16}/> Backup & Restore</button>
                             )}
                             <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{user?.nama?.charAt(0) || 'U'}</div><div className="overflow-hidden"><p className="text-sm font-bold text-white truncate">{user?.nama || 'User'}</p><p className="text-xs text-slate-500 capitalize">{user?.role || ''}{isWalas ? ' (Walas)' : ''}</p></div></div>
-                            <button onClick={handleLogout} className="w-full bg-red-600/20 text-red-400 py-2 rounded text-sm hover:bg-red-600 hover:text-white transition flex items-center justify-center gap-2"><Icon name="log-out" size={16}/> Keluar</button>
+                            <button onClick={() => handleLogout()} className="w-full bg-red-600/20 text-red-400 py-2 rounded text-sm hover:bg-red-600 hover:text-white transition flex items-center justify-center gap-2"><Icon name="log-out" size={16}/> Keluar</button>
                         </div>
                     </aside>
                     <main className={`flex-1 flex flex-col h-full transition-all duration-300 no-print`}>
