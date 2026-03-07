@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro v6.6 - SMAS AL-MULTAZAM</title>
+    <title>e-Rapor Pro v6.7 - SMAS AL-MULTAZAM</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -143,9 +143,9 @@
                 { id: 4, nisn: '1038', nama: 'BUDI SANTOSO', kelas: 'XII-B', fase: 'F', no_absen: 1 },
             ],
             guru: [
-                { id: 1, nip: '19850101', nama: 'Retno Wandhira, S.Pd.', mapel: 'Matematika', tugasTambahan: 'Wali Kelas X-A', kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 2, nip: '19900202', nama: 'Agus Setiawan, S.Kom.', mapel: 'Informatika', tugasTambahan: 'Kepala Sekolah', kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 3, nip: '19950505', nama: 'Evi Rahmawati, S.Pd.', mapel: 'Bahasa Inggris', tugasTambahan: 'Waka Akademik', kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
+                { id: 1, nip: '19850101', nama: 'Retno Wandhira, S.Pd.', mapel: 'Matematika', tugasTambahan: ['Wali Kelas X-A'], kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
+                { id: 2, nip: '19900202', nama: 'Agus Setiawan, S.Kom.', mapel: 'Informatika', tugasTambahan: ['Kepala Sekolah'], kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
+                { id: 3, nip: '19950505', nama: 'Evi Rahmawati, S.Pd.', mapel: 'Bahasa Inggris', tugasTambahan: ['Waka Akademik'], kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
             ],
             kelas: [
                 { id: 1, nama: 'X-A', tingkat: 'X', jurusan: 'Umum' },
@@ -240,7 +240,6 @@
                     if (docSnap.exists()) {
                         setData(docSnap.data());
                     } else {
-                        // PERBAIKAN: Tidak menginisialisasi langsung jika database kosong. Melainkan memberi status flag.
                         setData({ _isEmpty: true });
                     }
                     setLoading(false);
@@ -288,6 +287,47 @@
             const handleToggleAll = () => onChange(isAllSelected ? [] : availableClasses.map(c => c.nama));
             const handleToggle = (className) => { const current = selectedClasses || []; onChange(current.includes(className) ? current.filter(c => c !== className) : [...current, className]); };
             return (<div className="mb-4"><div className="flex justify-between items-center mb-2"><label className="block text-sm font-medium text-slate-700">{label}</label><button onClick={handleToggleAll} className="text-xs text-blue-600 hover:text-blue-800 font-medium">{isAllSelected ? "Hapus Semua" : "Pilih Semua"}</button></div><div className="grid grid-cols-3 gap-2 border p-3 rounded-lg bg-slate-50 max-h-32 overflow-y-auto">{availableClasses.map(k => (<label key={k.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded"><input type="checkbox" checked={(selectedClasses || []).includes(k.nama)} onChange={() => handleToggle(k.nama)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"/><span className="text-sm">{k.nama}</span></label>))}</div><div className="text-xs text-slate-500 mt-1">{(selectedClasses || []).length === 0 ? "Belum ada kelas dipilih" : `${(selectedClasses || []).length} kelas dipilih`}</div></div>);
+        };
+
+        const TugasTambahanSelector = ({ availableClasses, selectedTugas = [], onChange }) => {
+            const currentSelected = Array.isArray(selectedTugas) ? selectedTugas : (selectedTugas && selectedTugas !== '-' ? selectedTugas.split(',').map(s=>s.trim()) : []);
+            
+            const options = [
+                'Kepala Sekolah',
+                'Waka Akademik',
+                'Panitia Sumatif',
+                ...availableClasses.map(k => `Wali Kelas ${k.nama}`)
+            ];
+
+            const handleToggle = (task) => {
+                if (currentSelected.includes(task)) {
+                    onChange(currentSelected.filter(t => t !== task));
+                } else {
+                    onChange([...currentSelected, task]);
+                }
+            };
+
+            return (
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Tugas Tambahan</label>
+                    <div className="grid grid-cols-2 gap-2 border p-3 rounded-lg bg-slate-50 max-h-40 overflow-y-auto">
+                        {options.map(opt => (
+                            <label key={opt} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
+                                <input 
+                                    type="checkbox" 
+                                    checked={currentSelected.includes(opt)} 
+                                    onChange={() => handleToggle(opt)} 
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm">{opt}</span>
+                            </label>
+                        ))}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                        {currentSelected.length === 0 ? "Tidak ada tugas tambahan" : `${currentSelected.length} tugas dipilih`}
+                    </div>
+                </div>
+            );
         };
 
         // --- COMPONENTS ---
@@ -494,21 +534,33 @@
                     const mapelObj = (data.mapel || []).find(m => m.nama.toLowerCase() === (g.mapel || '').trim().toLowerCase());
                     const mapelId = mapelObj ? mapelObj.id : null;
                     const targetClasses = g.kelasMengajar || [];
-                    const students = (data.siswa || []).filter(s => targetClasses.includes(s.kelas));
-                    const totalStudents = students.length;
                     
-                    let filledStudents = 0;
-                    if (mapelId && totalStudents > 0) {
-                        students.forEach(s => {
-                            const gradeRecord = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelId));
-                            if (gradeRecord) {
-                                const hasGrade = ['s1','s2','s3','s4','s5','sts','sas'].some(k => parseInt(gradeRecord[k]) > 0);
-                                if (hasGrade) filledStudents++;
-                            }
-                        });
-                    }
-                    const percentage = totalStudents > 0 ? Math.round((filledStudents / totalStudents) * 100) : 0;
-                    return { ...g, totalStudents, filledStudents, percentage };
+                    // Kalkulasi progress per-kelas untuk guru ini
+                    const classStats = targetClasses.map(className => {
+                        const studentsInClass = (data.siswa || []).filter(s => s.kelas === className);
+                        const total = studentsInClass.length;
+                        let filled = 0;
+                        
+                        if (mapelId && total > 0) {
+                            studentsInClass.forEach(s => {
+                                const gradeRecord = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelId));
+                                if (gradeRecord) {
+                                    // Siswa dianggap 'dinilai' jika ada salah satu kolom yang terisi angka (termasuk 0, asal bukan kosong '')
+                                    const hasGrade = ['s1','s2','s3','s4','s5','sts','sas'].some(k => gradeRecord[k] !== undefined && gradeRecord[k] !== '');
+                                    if (hasGrade) filled++;
+                                }
+                            });
+                        }
+                        const percentage = total > 0 ? Math.round((filled / total) * 100) : 0;
+                        return { className, total, filled, percentage };
+                    });
+
+                    // Kalkulasi status keseluruhan untuk guru tersebut
+                    const isAllDone = classStats.length > 0 && classStats.every(cs => cs.percentage === 100);
+                    const isAnyStarted = classStats.some(cs => cs.percentage > 0);
+                    const overallStatus = isAllDone ? 'SELESAI' : isAnyStarted ? 'PROSES' : 'KOSONG';
+
+                    return { ...g, classStats, overallStatus };
                 });
             }, [data.guru, data.mapel, data.siswa, data.nilaiMapel]);
 
@@ -520,42 +572,52 @@
                     <div className="bg-white rounded-xl shadow border overflow-hidden">
                         <div className="p-4 bg-blue-50 border-b flex items-center gap-2 text-blue-800 text-sm">
                             <Icon name="info" size={16}/>
-                            <span>Menampilkan persentase pengisian nilai berdasarkan jumlah siswa yang diajar sesuai kelas dan mata pelajaran yang diampu.</span>
+                            <span>Menampilkan persentase pengisian nilai <b>per kelas</b> berdasarkan mata pelajaran yang diampu oleh masing-masing guru.</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-slate-50 border-b">
                                     <tr>
                                         <th className="p-3 w-10 text-center">No</th>
-                                        <th className="p-3">Nama Guru</th>
-                                        <th className="p-3">Mata Pelajaran</th>
-                                        <th className="p-3">Kelas Mengajar</th>
-                                        <th className="p-3 w-64">Progres Penilaian</th>
-                                        <th className="p-3 w-24 text-center">Status</th>
+                                        <th className="p-3 w-48">Nama Guru</th>
+                                        <th className="p-3 w-40">Mata Pelajaran</th>
+                                        <th className="p-3 min-w-[300px]">Progres Penilaian Per Kelas</th>
+                                        <th className="p-3 w-28 text-center">Status Total</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
                                     {guruStats.map((g, idx) => (
                                         <tr key={g.id} className="hover:bg-slate-50">
-                                            <td className="p-3 text-center">{idx + 1}</td>
-                                            <td className="p-3 font-medium">{g.nama}</td>
-                                            <td className="p-3">{g.mapel}</td>
-                                            <td className="p-3">{g.kelasMengajar ? g.kelasMengajar.join(', ') : '-'}</td>
-                                            <td className="p-3">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-full bg-slate-200 rounded-full h-2.5">
-                                                        <div className={`h-2.5 rounded-full transition-all duration-500 ${g.percentage === 100 ? 'bg-emerald-500' : g.percentage > 0 ? 'bg-blue-500' : 'bg-slate-400'}`} style={{width: `${g.percentage}%`}}></div>
-                                                    </div>
-                                                    <span className="text-xs font-bold w-10 text-right">{g.percentage}%</span>
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 mt-1">{g.filledStudents} dari {g.totalStudents} Siswa dinilai</div>
+                                            <td className="p-3 text-center align-top">{idx + 1}</td>
+                                            <td className="p-3 font-medium align-top">{g.nama}</td>
+                                            <td className="p-3 align-top">
+                                                <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded text-xs">{g.mapel}</span>
                                             </td>
-                                            <td className="p-3 text-center">
-                                                {g.percentage === 100 ? <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">SELESAI</span> : g.percentage > 0 ? <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">PROSES</span> : <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">KOSONG</span>}
+                                            <td className="p-3">
+                                                {g.classStats.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        {g.classStats.map((cs, i) => (
+                                                            <div key={i} className="flex flex-col">
+                                                                <div className="flex justify-between text-xs mb-1">
+                                                                    <span className="font-bold text-slate-700">Kelas {cs.className}</span>
+                                                                    <span className="text-slate-500">{cs.filled} / {cs.total} Siswa ({cs.percentage}%)</span>
+                                                                </div>
+                                                                <div className="w-full bg-slate-200 rounded-full h-2">
+                                                                    <div className={`h-2 rounded-full transition-all duration-500 ${cs.percentage === 100 ? 'bg-emerald-500' : cs.percentage > 0 ? 'bg-blue-500' : 'bg-slate-400'}`} style={{width: `${cs.percentage}%`}}></div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400 italic">Belum ada kelas yang diampu</span>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-center align-top">
+                                                {g.overallStatus === 'SELESAI' ? <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">SELESAI</span> : g.overallStatus === 'PROSES' ? <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">PROSES</span> : <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">KOSONG</span>}
                                             </td>
                                         </tr>
                                     ))}
-                                    {guruStats.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">Tidak ada data guru.</td></tr>}
+                                    {guruStats.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400">Tidak ada data guru.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -782,10 +844,13 @@
 
                 const walasClasses = new Set();
                 profiles.forEach(g => {
-                    if (g.tugasTambahan && g.tugasTambahan.toLowerCase().includes('wali kelas')) {
-                         const walasClassName = g.tugasTambahan.replace(/wali kelas/i, '').trim();
-                         walasClasses.add(walasClassName);
-                    }
+                    const tasks = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : (g.tugasTambahan ? g.tugasTambahan.split(',') : []);
+                    tasks.forEach(t => {
+                        if (t.toLowerCase().includes('wali kelas')) {
+                            const walasClassName = t.replace(/wali kelas/i, '').trim();
+                            walasClasses.add(walasClassName);
+                        }
+                    });
                 });
 
                 if (walasClasses.size > 0) {
@@ -851,10 +916,13 @@
 
                 const walasClasses = new Set();
                 profiles.forEach(g => {
-                    if (g.tugasTambahan && g.tugasTambahan.toLowerCase().includes('wali kelas')) {
-                         const walasClassName = g.tugasTambahan.replace(/wali kelas/i, '').trim();
-                         walasClasses.add(walasClassName);
-                    }
+                    const tasks = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : (g.tugasTambahan ? g.tugasTambahan.split(',') : []);
+                    tasks.forEach(t => {
+                        if (t.toLowerCase().includes('wali kelas')) {
+                            const walasClassName = t.replace(/wali kelas/i, '').trim();
+                            walasClasses.add(walasClassName);
+                        }
+                    });
                 });
 
                 if (walasClasses.size > 0) {
@@ -981,10 +1049,13 @@
 
                 const walasClasses = new Set();
                 profiles.forEach(g => {
-                    if (g.tugasTambahan && g.tugasTambahan.toLowerCase().includes('wali kelas')) {
-                         const walasClassName = g.tugasTambahan.replace(/wali kelas/i, '').trim();
-                         walasClasses.add(walasClassName);
-                    }
+                    const tasks = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : (g.tugasTambahan ? g.tugasTambahan.split(',') : []);
+                    tasks.forEach(t => {
+                        if (t.toLowerCase().includes('wali kelas')) {
+                            const walasClassName = t.replace(/wali kelas/i, '').trim();
+                            walasClasses.add(walasClassName);
+                        }
+                    });
                 });
 
                 if (walasClasses.size > 0) {
@@ -1126,11 +1197,14 @@
                     
                     profiles.forEach(g => {
                         if (g.tugasTambahan) {
-                            const task = g.tugasTambahan.toLowerCase();
-                            if (task.includes('wali kelas')) w = true;
-                            if (task === 'kepala sekolah') k = true;
-                            if (task === 'waka akademik') a = true;
-                            if (task === 'panitia sumatif') p = true;
+                            const taskList = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : g.tugasTambahan.split(',');
+                            taskList.forEach(t => {
+                                const task = t.trim().toLowerCase();
+                                if (task.includes('wali kelas')) w = true;
+                                if (task === 'kepala sekolah') k = true;
+                                if (task === 'waka akademik') a = true;
+                                if (task === 'panitia sumatif') p = true;
+                            });
                         }
                     });
                 }
@@ -1158,7 +1232,15 @@
                     const fileData = new Uint8Array(e.target.result); const workbook = XLSX.read(fileData, { type: 'array' }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(sheet);
                     updateData(prev => {
                         if (type === 'siswa') { const newSiswa = json.map(row => ({ id: Date.now() + Math.random(), nisn: String(row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn'] || ''), nama: String(row['NAMA'] || row['nama'] || row['NAMA LENGKAP'] || ''), kelas: String(row['KELAS'] || row['kelas'] || ''), fase: String(row['FASE'] || row['fase'] || 'E'), no_absen: row['NO_ABSEN'] || row['no_absen'] || 0 })).filter(s => s.nama); notify(`Berhasil import ${newSiswa.length} siswa!`, 'success'); return { ...prev, siswa: [...(prev.siswa || []), ...newSiswa] }; } 
-                        else if (type === 'guru') { const newGuru = json.map(row => ({ id: Date.now() + Math.random(), nip: String(row['NIP'] || row['nip'] || ''), nama: String(row['NAMA'] || row['nama'] || ''), mapel: String(row['MAPEL'] || row['mapel'] || ''), tugasTambahan: String(row['TUGAS_TAMBAHAN'] || row['tugas_tambahan'] || '-') })).filter(g => g.nama); notify(`Berhasil import ${newGuru.length} guru!`, 'success'); return { ...prev, guru: [...(prev.guru || []), ...newGuru] }; }
+                        else if (type === 'guru') { 
+                            const newGuru = json.map(row => {
+                                const tugasStr = String(row['TUGAS_TAMBAHAN'] || row['tugas_tambahan'] || '');
+                                const tugasArray = tugasStr.split(',').map(s=>s.trim()).filter(s=>s!=='' && s!=='-');
+                                return { id: Date.now() + Math.random(), nip: String(row['NIP'] || row['nip'] || ''), nama: String(row['NAMA'] || row['nama'] || ''), mapel: String(row['MAPEL'] || row['mapel'] || ''), tugasTambahan: tugasArray };
+                            }).filter(g => g.nama); 
+                            notify(`Berhasil import ${newGuru.length} guru!`, 'success'); 
+                            return { ...prev, guru: [...(prev.guru || []), ...newGuru] }; 
+                        }
                         return prev;
                     });
                 }; reader.readAsArrayBuffer(file); event.target.value = null;
@@ -1235,7 +1317,7 @@
                     case 'data_logo': return <LogoSetting data={data} setData={updateData} notify={notify} />;
                     case 'data_akun': return <DataAkun data={data} setData={updateData} notify={notify} />;
                     case 'siswa': return <TableView title="Data Siswa" heads={['Nomor Induk','Nama','Kelas','Fase']} data={data.siswa} searchKeys={['nama','nisn']} filterOptions={data.kelas} filterKey="kelas" renderRow={i=><><td className="p-4">{i.nisn}</td><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.kelas}</td><td className="p-4">{i.fase}</td></>} onAdd={()=>openModal('siswa')} onEdit={d=>openModal('siswa',d)} onDelete={id=>deleteItem('siswa', id)} onImport={(e) => processImport(e, 'siswa')} onDownloadTemplate={() => downloadTemplate('siswa')} />;
-                    case 'guru': return <TableView title="Data Guru" heads={['NIP','Nama','Mapel','Tugas','Kelas Mengajar']} data={data.guru} searchKeys={['nama','nip']} renderRow={i=><><td className="p-4">{i.nip}</td><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.mapel}</td><td className="p-4 text-sm">{i.tugasTambahan || '-'}</td><td className="p-4 text-xs italic">{(i.kelasMengajar||[]).join(', ') || '-'}</td></>} onAdd={()=>openModal('guru')} onEdit={d=>openModal('guru',d)} onDelete={id=>deleteItem('guru', id)} onImport={(e) => processImport(e, 'guru')} onDownloadTemplate={() => downloadTemplate('guru')} />;
+                    case 'guru': return <TableView title="Data Guru" heads={['NIP','Nama','Mapel','Tugas','Kelas Mengajar']} data={data.guru} searchKeys={['nama','nip']} renderRow={i=><><td className="p-4">{i.nip}</td><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.mapel}</td><td className="p-4 text-sm">{Array.isArray(i.tugasTambahan) ? (i.tugasTambahan.length > 0 ? i.tugasTambahan.join(', ') : '-') : (i.tugasTambahan || '-')}</td><td className="p-4 text-xs italic">{(i.kelasMengajar||[]).join(', ') || '-'}</td></>} onAdd={()=>openModal('guru')} onEdit={d=>openModal('guru',d)} onDelete={id=>deleteItem('guru', id)} onImport={(e) => processImport(e, 'guru')} onDownloadTemplate={() => downloadTemplate('guru')} />;
                     case 'mapel': return <TableView title="Data Mapel" heads={['Nama','Kelompok','Kelas']} data={data.mapel} searchKeys={['nama']} filterOptions={data.kelas} filterKey="kelas" renderRow={i=><><td className="p-4 font-medium">{i.nama}</td><td className="p-4 text-center">{i.kelompok}</td><td className="p-4 text-xs italic">{(i.kelas||[]).join(', ') || 'Semua'}</td></>} onAdd={()=>openModal('mapel')} onEdit={d=>openModal('mapel',d)} onDelete={id=>deleteItem('mapel', id)} />;
                     case 'kelas': return <TableView title="Data Kelas" heads={['Nama','Tingkat','Jurusan']} data={data.kelas} searchKeys={['nama']} renderRow={i=><><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.tingkat}</td><td className="p-4">{i.jurusan}</td></>} onAdd={()=>openModal('kelas')} onEdit={d=>openModal('kelas',d)} onDelete={id=>deleteItem('kelas', id)} />;
                     case 'referensi_ekskul': return <TableView title="Data Ekstrakurikuler" heads={['Nama Kegiatan']} data={data.ekskulRef} searchKeys={['nama']} renderRow={i=><td className="p-4 font-medium">{i.nama}</td>} onAdd={()=>openModal('ekskul')} onEdit={d=>openModal('ekskul',d)} onDelete={id=>deleteItem('ekskulRef', id)} />;
@@ -1279,16 +1361,7 @@
                                             {(data.mapel||[]).sort((a,b) => a.nama.localeCompare(b.nama)).map(m => (<option key={m.id} value={m.nama}>{m.nama}</option>))}
                                         </select>
                                     </div>
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Tugas Tambahan</label>
-                                        <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={formData.tugasTambahan || '-'} onChange={e => setFormData({...formData, tugasTambahan: e.target.value})}>
-                                            <option value="-">Tidak Ada</option>
-                                            <option value="Kepala Sekolah">Kepala Sekolah</option>
-                                            <option value="Waka Akademik">Waka Akademik</option>
-                                            <option value="Panitia Sumatif">Panitia Sumatif</option>
-                                            {(data.kelas||[]).map(k => (<option key={k.id} value={`Wali Kelas ${k.nama}`}>Wali Kelas {k.nama}</option>))}
-                                        </select>
-                                    </div>
+                                    <TugasTambahanSelector availableClasses={data.kelas||[]} selectedTugas={formData.tugasTambahan} onChange={v=>setFormData({...formData,tugasTambahan:v})}/>
                                     <ClassSelector label="Kelas Mengajar" availableClasses={data.kelas||[]} selectedClasses={formData.kelasMengajar} onChange={v=>setFormData({...formData,kelasMengajar:v})}/>
                                 </>
                              )}
