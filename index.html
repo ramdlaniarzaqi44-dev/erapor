@@ -1015,7 +1015,57 @@
             const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
             const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             
-            const downloadExcel = () => { /* Logic omitted for length, UI button kept functional-looking */ };
+            const downloadExcel = () => { 
+                if (!selKelas || !selMapel) return notify('Pilih Kelas dan Mapel terlebih dahulu', 'error');
+                if (students.length === 0) return notify('Tidak ada siswa di kelas ini', 'error');
+
+                const mapelName = availableMapel.find(m => String(m.id) === String(selMapel))?.nama || 'Mapel';
+
+                let headers = ['NO', 'NAMA SISWA', 'S1', 'S2', 'S3', 'S4', 'S5', 'RERATA'];
+                if (!isKelas12) headers.push('STS');
+                headers.push('SAS', 'AKHIR', 'PREDIKAT');
+                if (isKelas12) headers.push('PSAJ PRAKTIK', 'PSAJ TULIS');
+
+                const rows = students.map((s, i) => {
+                    const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {};
+                    const sum = [val.s1, val.s2, val.s3, val.s4, val.s5].map(v => parseInt(v) || 0).filter(v => v > 0);
+                    const rerata = sum.length ? Math.round(sum.reduce((a, b) => a + b, 0) / sum.length) : 0;
+                    const sts = parseInt(val.sts) || 0;
+                    const sas = parseInt(val.sas) || 0;
+                    const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts + sas) / 3);
+                    
+                    let predikat = 'D';
+                    if (akhir >= 92) predikat = 'A';
+                    else if (akhir >= 83) predikat = 'B';
+                    else if (akhir >= 75) predikat = 'C';
+
+                    const rowData = [
+                        i + 1,
+                        s.nama,
+                        val.s1 !== undefined ? val.s1 : '',
+                        val.s2 !== undefined ? val.s2 : '',
+                        val.s3 !== undefined ? val.s3 : '',
+                        val.s4 !== undefined ? val.s4 : '',
+                        val.s5 !== undefined ? val.s5 : '',
+                        rerata
+                    ];
+                    
+                    if (!isKelas12) rowData.push(val.sts !== undefined ? val.sts : '');
+                    rowData.push(val.sas !== undefined ? val.sas : '', akhir, predikat);
+                    
+                    if (isKelas12) {
+                        rowData.push(val.psaj_praktik !== undefined ? val.psaj_praktik : '', val.psaj_tulis !== undefined ? val.psaj_tulis : '');
+                    }
+
+                    return rowData;
+                });
+
+                const wb = XLSX.utils.book_new(); 
+                const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]); 
+                XLSX.utils.book_append_sheet(wb, ws, "Leger Nilai"); 
+                XLSX.writeFile(wb, `Leger_Nilai_${selKelas}_${mapelName.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
+            };
+            
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Leger Nilai</h2><button onClick={downloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Download Excel</button></div>
