@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro v6.7 - SMAS AL-MULTAZAM PRO</title>
+    <title>e-Rapor Pro v6.9 - SMAS AL-MULTAZAM PRO</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -487,12 +487,14 @@
         };
 
         const MappingRapor = ({ dataMapel, classList, setData, notify }) => { 
-            const [edits, setEdits] = useState(dataMapel || []); const [selectedClass, setSelectedClass] = useState('');
+            const [edits, setEdits] = useState(dataMapel || []); 
+            const [selectedClass, setSelectedClass] = useState('');
+            const [copySourceClass, setCopySourceClass] = useState('');
+
             useEffect(() => { setEdits(dataMapel || []); }, [dataMapel]);
+            
             const handleToggleActive = (mapelId, className) => { setEdits(prev => prev.map(m => { if (String(m.id) === String(mapelId)) { const currentClasses = m.kelas || []; let newClasses; if (currentClasses.includes(className)) { newClasses = currentClasses.filter(c => c !== className); } else { newClasses = [...currentClasses, className]; } return { ...m, kelas: newClasses }; } return m; })); };
             const handleChange = (id, field, val) => setEdits(prev => prev.map(m => String(m.id) === String(id) ? { ...m, [field]: val } : m));
-            
-            // FUNGSI BARU: Menyimpan Parent Group secara spesifik ke dalam kelas yang sedang dipilih
             const handleParentChange = (id, className, val) => setEdits(prev => prev.map(m => {
                 if (String(m.id) === String(id)) {
                     return { ...m, parent_per_kelas: { ...(m.parent_per_kelas || {}), [className]: val } };
@@ -500,13 +502,70 @@
                 return m;
             }));
 
+            const handleCopyMapping = () => {
+                if (!copySourceClass) return notify("Pilih kelas sumber untuk disalin", "error");
+                if (copySourceClass === selectedClass) return notify("Tidak bisa menyalin dari kelas yang sama", "error");
+                if (!confirm(`Yakin ingin menyalin mapping dari kelas ${copySourceClass} ke ${selectedClass}?\n\nMapping (Status Aktif & Parent Group) sebelumnya di kelas ${selectedClass} akan digantikan dengan data dari ${copySourceClass}.`)) return;
+
+                const newEdits = edits.map(m => {
+                    const newMapel = { ...m };
+                    
+                    // 1. Copy Status Aktif
+                    const isActiveInSource = newMapel.kelas && newMapel.kelas.includes(copySourceClass);
+                    let currentClasses = newMapel.kelas || [];
+                    
+                    if (isActiveInSource && !currentClasses.includes(selectedClass)) {
+                        newMapel.kelas = [...currentClasses, selectedClass];
+                    } else if (!isActiveInSource && currentClasses.includes(selectedClass)) {
+                        newMapel.kelas = currentClasses.filter(c => c !== selectedClass);
+                    }
+
+                    // 2. Copy Parent Group
+                    const sourceParent = newMapel.parent_per_kelas && newMapel.parent_per_kelas[copySourceClass] !== undefined 
+                                         ? newMapel.parent_per_kelas[copySourceClass] 
+                                         : (newMapel.parent || '');
+                    
+                    newMapel.parent_per_kelas = { ...(newMapel.parent_per_kelas || {}), [selectedClass]: sourceParent };
+
+                    return newMapel;
+                });
+
+                setEdits(newEdits);
+                setData(prev => ({ ...prev, mapel: newEdits }));
+                setCopySourceClass('');
+                notify(`Berhasil menyalin & menyimpan mapping dari kelas ${copySourceClass}!`, "success");
+            };
+
             const save = () => { setData(prev => ({ ...prev, mapel: edits })); notify("Mapping berhasil disimpan"); };
             const sortedMapels = [...edits].sort((a,b)=>a.urutan-b.urutan);
+            
             return (
                 <div className="space-y-6 animate-fade">
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="text-2xl font-bold text-slate-800">Mapping Rapor (Per Kelas)</h2><div className="flex gap-2 w-full md:w-auto"><select className="border p-2 rounded-lg bg-white text-sm w-full md:w-64 font-bold text-slate-700 focus:ring-2 focus:ring-secondary outline-none" value={selectedClass} onChange={e=>setSelectedClass(e.target.value)}><option value="">-- Pilih Kelas --</option>{(classList||[]).map(c=><option key={c.id} value={c.nama}>Pengaturan Kelas {c.nama}</option>)}</select><button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow flex gap-2 items-center hover:bg-blue-700 transition whitespace-nowrap"><Icon name="save" size={18}/> Simpan</button></div></div>
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <h2 className="text-2xl font-bold text-slate-800">Mapping Rapor (Per Kelas)</h2>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <select className="border p-2 rounded-lg bg-white text-sm w-full md:w-64 font-bold text-slate-700 focus:ring-2 focus:ring-secondary outline-none" value={selectedClass} onChange={e=>{setSelectedClass(e.target.value); setCopySourceClass('');}}>
+                                <option value="">-- Pilih Kelas --</option>
+                                {(classList||[]).map(c=><option key={c.id} value={c.nama}>Pengaturan Kelas {c.nama}</option>)}
+                            </select>
+                            <button onClick={save} className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow flex gap-2 items-center hover:bg-blue-700 transition whitespace-nowrap"><Icon name="save" size={18}/> Simpan</button>
+                        </div>
+                    </div>
+                    
                     {selectedClass ? (
-                        <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden"><div className="p-4 bg-blue-50 border-b flex items-center gap-2 text-blue-800 text-sm"><Icon name="info" size={16}/><span>Menampilkan pengaturan mata pelajaran untuk <b>Kelas {selectedClass}</b>. Centang "Aktif" untuk menampilkan mapel di rapor kelas ini.</span></div><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-slate-600 uppercase text-xs"><tr><th className="p-3 w-16 text-center">Urut</th><th className="p-3">Mata Pelajaran</th><th className="p-3 w-24">Kelompok</th><th className="p-3">Parent Group</th><th className="p-3 w-20 text-center">KKM</th><th className="p-3 w-32 text-center bg-yellow-50/50">Aktif di {selectedClass}?</th></tr></thead><tbody className="divide-y divide-slate-100">{sortedMapels.length > 0 ? sortedMapels.map(m => { const isActive = m.kelas && m.kelas.includes(selectedClass); const currentParent = m.parent_per_kelas && m.parent_per_kelas[selectedClass] !== undefined ? m.parent_per_kelas[selectedClass] : (m.parent || ''); return (<tr key={m.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50 bg-slate-50' : ''}`}><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.urutan} onChange={e=>handleChange(m.id,'urutan',parseInt(e.target.value))}/></td><td className="p-2 font-medium">{m.nama}</td><td className="p-2"><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kelompok} onChange={e=>handleChange(m.id,'kelompok',e.target.value)}><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></td><td className="p-2"><input type="text" className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentParent} placeholder="-" onChange={e=>handleParentChange(m.id, selectedClass, e.target.value)}/></td><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kkm} onChange={e=>handleChange(m.id,'kkm',parseInt(e.target.value))}/></td><td className="p-2 text-center bg-yellow-50/30"><label className="flex items-center justify-center cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-emerald-500 cursor-pointer" checked={isActive} onChange={() => handleToggleActive(m.id, selectedClass)}/></label></td></tr>); }) : <tr><td colSpan="6" className="p-8 text-center text-slate-400">Tidak ada data mapel</td></tr>}</tbody></table></div>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm w-full">
+                                <Icon name="copy" size={16} className="text-indigo-600 shrink-0"/>
+                                <span className="font-medium text-indigo-900 shrink-0">Salin mapping dari kelas:</span>
+                                <select className="border border-slate-300 rounded p-1.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-white flex-1 max-w-xs" value={copySourceClass} onChange={e=>setCopySourceClass(e.target.value)}>
+                                    <option value="">-- Pilih Kelas Sumber --</option>
+                                    {(classList||[]).filter(c => c.nama !== selectedClass).map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
+                                </select>
+                                <button onClick={handleCopyMapping} className="bg-indigo-600 text-white px-4 py-1.5 rounded hover:bg-indigo-700 transition font-medium shadow-sm shrink-0">Terapkan & Simpan</button>
+                            </div>
+
+                            <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden"><div className="p-4 bg-blue-50 border-b flex items-center gap-2 text-blue-800 text-sm"><Icon name="info" size={16}/><span>Menampilkan pengaturan mata pelajaran untuk <b>Kelas {selectedClass}</b>. Centang "Aktif" untuk menampilkan mapel di rapor kelas ini.</span></div><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-slate-600 uppercase text-xs"><tr><th className="p-3 w-16 text-center">Urut</th><th className="p-3">Mata Pelajaran</th><th className="p-3 w-24">Kelompok</th><th className="p-3">Parent Group</th><th className="p-3 w-20 text-center">KKM</th><th className="p-3 w-32 text-center bg-yellow-50/50">Aktif di {selectedClass}?</th></tr></thead><tbody className="divide-y divide-slate-100">{sortedMapels.length > 0 ? sortedMapels.map(m => { const isActive = m.kelas && m.kelas.includes(selectedClass); const currentParent = m.parent_per_kelas && m.parent_per_kelas[selectedClass] !== undefined ? m.parent_per_kelas[selectedClass] : (m.parent || ''); return (<tr key={m.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50 bg-slate-50' : ''}`}><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.urutan} onChange={e=>handleChange(m.id,'urutan',parseInt(e.target.value))}/></td><td className="p-2 font-medium">{m.nama}</td><td className="p-2"><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kelompok} onChange={e=>handleChange(m.id,'kelompok',e.target.value)}><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></td><td className="p-2"><input type="text" className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentParent} placeholder="-" onChange={e=>handleParentChange(m.id, selectedClass, e.target.value)}/></td><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kkm} onChange={e=>handleChange(m.id,'kkm',parseInt(e.target.value))}/></td><td className="p-2 text-center bg-yellow-50/30"><label className="flex items-center justify-center cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-emerald-500 cursor-pointer" checked={isActive} onChange={() => handleToggleActive(m.id, selectedClass)}/></label></td></tr>); }) : <tr><td colSpan="6" className="p-8 text-center text-slate-400">Tidak ada data mapel</td></tr>}</tbody></table></div>
+                        </div>
                     ) : ( <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-dashed text-slate-400"><Icon name="arrow-up-circle" size={48} className="mb-4 text-slate-300"/><p className="text-lg font-medium">Silakan pilih kelas terlebih dahulu</p></div> )}
                 </div>
             );
