@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro v6.9 - SMAS AL-MULTAZAM PRO</title>
+    <title>e-Rapor Pro v6.10 - SMAS AL-MULTAZAM</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -493,19 +493,36 @@
 
             useEffect(() => { setEdits(dataMapel || []); }, [dataMapel]);
             
-            const handleToggleActive = (mapelId, className) => { setEdits(prev => prev.map(m => { if (String(m.id) === String(mapelId)) { const currentClasses = m.kelas || []; let newClasses; if (currentClasses.includes(className)) { newClasses = currentClasses.filter(c => c !== className); } else { newClasses = [...currentClasses, className]; } return { ...m, kelas: newClasses }; } return m; })); };
-            const handleChange = (id, field, val) => setEdits(prev => prev.map(m => String(m.id) === String(id) ? { ...m, [field]: val } : m));
-            const handleParentChange = (id, className, val) => setEdits(prev => prev.map(m => {
-                if (String(m.id) === String(id)) {
-                    return { ...m, parent_per_kelas: { ...(m.parent_per_kelas || {}), [className]: val } };
-                }
-                return m;
-            }));
+            const handleToggleActive = (mapelId, className) => { 
+                setEdits(prev => prev.map(m => { 
+                    if (String(m.id) === String(mapelId)) { 
+                        const currentClasses = m.kelas || []; 
+                        let newClasses; 
+                        if (currentClasses.includes(className)) { 
+                            newClasses = currentClasses.filter(c => c !== className); 
+                        } else { 
+                            newClasses = [...currentClasses, className]; 
+                        } 
+                        return { ...m, kelas: newClasses }; 
+                    } 
+                    return m; 
+                })); 
+            };
+            
+            const handlePerKelasChange = (id, className, field, val) => {
+                setEdits(prev => prev.map(m => {
+                    if (String(m.id) === String(id)) {
+                        const specificField = `${field}_per_kelas`;
+                        return { ...m, [specificField]: { ...(m[specificField] || {}), [className]: val } };
+                    }
+                    return m;
+                }));
+            };
 
             const handleCopyMapping = () => {
                 if (!copySourceClass) return notify("Pilih kelas sumber untuk disalin", "error");
                 if (copySourceClass === selectedClass) return notify("Tidak bisa menyalin dari kelas yang sama", "error");
-                if (!confirm(`Yakin ingin menyalin mapping dari kelas ${copySourceClass} ke ${selectedClass}?\n\nMapping (Status Aktif & Parent Group) sebelumnya di kelas ${selectedClass} akan digantikan dengan data dari ${copySourceClass}.`)) return;
+                if (!confirm(`Yakin ingin menyalin mapping dari kelas ${copySourceClass} ke ${selectedClass}?\n\nMapping (Urutan, Kelompok, Parent Group, KKM & Status Aktif) sebelumnya di kelas ${selectedClass} akan digantikan dengan data dari ${copySourceClass}.`)) return;
 
                 const newEdits = edits.map(m => {
                     const newMapel = { ...m };
@@ -520,12 +537,16 @@
                         newMapel.kelas = currentClasses.filter(c => c !== selectedClass);
                     }
 
-                    // 2. Copy Parent Group
-                    const sourceParent = newMapel.parent_per_kelas && newMapel.parent_per_kelas[copySourceClass] !== undefined 
-                                         ? newMapel.parent_per_kelas[copySourceClass] 
-                                         : (newMapel.parent || '');
-                    
-                    newMapel.parent_per_kelas = { ...(newMapel.parent_per_kelas || {}), [selectedClass]: sourceParent };
+                    // 2. Copy Properties (Urutan, Kelompok, Parent, KKM)
+                    const propsToCopy = ['urutan', 'kelompok', 'parent', 'kkm'];
+                    propsToCopy.forEach(prop => {
+                        const specificField = `${prop}_per_kelas`;
+                        const sourceVal = newMapel[specificField] && newMapel[specificField][copySourceClass] !== undefined 
+                                            ? newMapel[specificField][copySourceClass] 
+                                            : (prop === 'parent' ? (newMapel.parent || '') : newMapel[prop]);
+                        
+                        newMapel[specificField] = { ...(newMapel[specificField] || {}), [selectedClass]: sourceVal };
+                    });
 
                     return newMapel;
                 });
@@ -537,7 +558,12 @@
             };
 
             const save = () => { setData(prev => ({ ...prev, mapel: edits })); notify("Mapping berhasil disimpan"); };
-            const sortedMapels = [...edits].sort((a,b)=>a.urutan-b.urutan);
+            
+            const sortedMapels = [...edits].sort((a,b)=> {
+                const valA = a.urutan_per_kelas && a.urutan_per_kelas[selectedClass] !== undefined ? a.urutan_per_kelas[selectedClass] : a.urutan;
+                const valB = b.urutan_per_kelas && b.urutan_per_kelas[selectedClass] !== undefined ? b.urutan_per_kelas[selectedClass] : b.urutan;
+                return valA - valB;
+            });
             
             return (
                 <div className="space-y-6 animate-fade">
@@ -564,7 +590,46 @@
                                 <button onClick={handleCopyMapping} className="bg-indigo-600 text-white px-4 py-1.5 rounded hover:bg-indigo-700 transition font-medium shadow-sm shrink-0">Terapkan & Simpan</button>
                             </div>
 
-                            <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden"><div className="p-4 bg-blue-50 border-b flex items-center gap-2 text-blue-800 text-sm"><Icon name="info" size={16}/><span>Menampilkan pengaturan mata pelajaran untuk <b>Kelas {selectedClass}</b>. Centang "Aktif" untuk menampilkan mapel di rapor kelas ini.</span></div><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-slate-600 uppercase text-xs"><tr><th className="p-3 w-16 text-center">Urut</th><th className="p-3">Mata Pelajaran</th><th className="p-3 w-24">Kelompok</th><th className="p-3">Parent Group</th><th className="p-3 w-20 text-center">KKM</th><th className="p-3 w-32 text-center bg-yellow-50/50">Aktif di {selectedClass}?</th></tr></thead><tbody className="divide-y divide-slate-100">{sortedMapels.length > 0 ? sortedMapels.map(m => { const isActive = m.kelas && m.kelas.includes(selectedClass); const currentParent = m.parent_per_kelas && m.parent_per_kelas[selectedClass] !== undefined ? m.parent_per_kelas[selectedClass] : (m.parent || ''); return (<tr key={m.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50 bg-slate-50' : ''}`}><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.urutan} onChange={e=>handleChange(m.id,'urutan',parseInt(e.target.value))}/></td><td className="p-2 font-medium">{m.nama}</td><td className="p-2"><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kelompok} onChange={e=>handleChange(m.id,'kelompok',e.target.value)}><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></td><td className="p-2"><input type="text" className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentParent} placeholder="-" onChange={e=>handleParentChange(m.id, selectedClass, e.target.value)}/></td><td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={m.kkm} onChange={e=>handleChange(m.id,'kkm',parseInt(e.target.value))}/></td><td className="p-2 text-center bg-yellow-50/30"><label className="flex items-center justify-center cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-emerald-500 cursor-pointer" checked={isActive} onChange={() => handleToggleActive(m.id, selectedClass)}/></label></td></tr>); }) : <tr><td colSpan="6" className="p-8 text-center text-slate-400">Tidak ada data mapel</td></tr>}</tbody></table></div>
+                            <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
+                                <div className="p-4 bg-blue-50 border-b flex items-center gap-2 text-blue-800 text-sm">
+                                    <Icon name="info" size={16}/>
+                                    <span>Menampilkan pengaturan mata pelajaran untuk <b>Kelas {selectedClass}</b>. Perubahan di sini tidak akan memengaruhi kelas lain.</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-50 border-b text-slate-600 uppercase text-xs">
+                                            <tr>
+                                                <th className="p-3 w-16 text-center">Urut</th>
+                                                <th className="p-3">Mata Pelajaran</th>
+                                                <th className="p-3 w-24">Kelompok</th>
+                                                <th className="p-3">Parent Group</th>
+                                                <th className="p-3 w-20 text-center">KKM</th>
+                                                <th className="p-3 w-32 text-center bg-yellow-50/50">Aktif di {selectedClass}?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {sortedMapels.length > 0 ? sortedMapels.map(m => { 
+                                                const isActive = m.kelas && m.kelas.includes(selectedClass); 
+                                                const currentUrutan = m.urutan_per_kelas && m.urutan_per_kelas[selectedClass] !== undefined ? m.urutan_per_kelas[selectedClass] : m.urutan;
+                                                const currentKelompok = m.kelompok_per_kelas && m.kelompok_per_kelas[selectedClass] !== undefined ? m.kelompok_per_kelas[selectedClass] : m.kelompok;
+                                                const currentParent = m.parent_per_kelas && m.parent_per_kelas[selectedClass] !== undefined ? m.parent_per_kelas[selectedClass] : (m.parent || '');
+                                                const currentKkm = m.kkm_per_kelas && m.kkm_per_kelas[selectedClass] !== undefined ? m.kkm_per_kelas[selectedClass] : m.kkm;
+
+                                                return (
+                                                    <tr key={m.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50 bg-slate-50' : ''}`}>
+                                                        <td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentUrutan} onChange={e=>handlePerKelasChange(m.id, selectedClass, 'urutan', parseInt(e.target.value))}/></td>
+                                                        <td className="p-2 font-medium">{m.nama}</td>
+                                                        <td className="p-2"><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentKelompok} onChange={e=>handlePerKelasChange(m.id, selectedClass, 'kelompok', e.target.value)}><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></td>
+                                                        <td className="p-2"><input type="text" className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentParent} placeholder="-" onChange={e=>handlePerKelasChange(m.id, selectedClass, 'parent', e.target.value)}/></td>
+                                                        <td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentKkm} onChange={e=>handlePerKelasChange(m.id, selectedClass, 'kkm', parseInt(e.target.value))}/></td>
+                                                        <td className="p-2 text-center bg-yellow-50/30"><label className="flex items-center justify-center cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-emerald-500 cursor-pointer" checked={isActive} onChange={() => handleToggleActive(m.id, selectedClass)}/></label></td>
+                                                    </tr>
+                                                ); 
+                                            }) : <tr><td colSpan="6" className="p-8 text-center text-slate-400">Tidak ada data mapel</td></tr>}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     ) : ( <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-dashed text-slate-400"><Icon name="arrow-up-circle" size={48} className="mb-4 text-slate-300"/><p className="text-lg font-medium">Silakan pilih kelas terlebih dahulu</p></div> )}
                 </div>
@@ -749,7 +814,11 @@
                     mapels = mapels.filter(m => myMapels.includes(m.nama.trim().toLowerCase()));
                 }
 
-                return mapels.sort((a,b) => a.urutan - b.urutan);
+                return mapels.sort((a,b) => {
+                    const valA = a.urutan_per_kelas && a.urutan_per_kelas[selKelas] !== undefined ? a.urutan_per_kelas[selKelas] : a.urutan;
+                    const valB = b.urutan_per_kelas && b.urutan_per_kelas[selKelas] !== undefined ? b.urutan_per_kelas[selKelas] : b.urutan;
+                    return valA - valB;
+                });
             }, [data.mapel, selKelas, guruProfiles, user.role]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
@@ -882,7 +951,7 @@
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Akademik</h2><div className="flex gap-2">{selKelas && selMapel && (<><button onClick={downloadTemplateNilai} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Format</button><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="upload" size={16}/> Import</button><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={importNilai} /></>)}<button onClick={handleSave} className="bg-accent text-white px-4 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm"><Icon name="save" size={16}/> Simpan</button></div></div>
-                    <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan}. {m.nama}</option>)}</select></div>
+                    <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : m.urutan}. {m.nama}</option>)}</select></div>
                     {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}{!isKelas12 && <th className="p-2 text-center w-16">STS</th>}<th className="p-2 text-center w-16">SAS</th><th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined ? nilai[f] : ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? sumatif.reduce((a,b)=>a+b,0)/sumatif.length : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts + sas) / 3); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}{!isKelas12 && <td className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sts')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sts`]: e.target.value}))}/></td>}<td className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sas')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sas`]: e.target.value}))}/></td><td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
                 </div>
             )
@@ -1074,7 +1143,11 @@
                     const myMapels = relevantProfiles.map(g => (g.mapel || '').trim().toLowerCase());
                     mapels = mapels.filter(m => myMapels.includes(m.nama.trim().toLowerCase()));
                 }
-                return mapels.sort((a,b) => a.urutan - b.urutan);
+                return mapels.sort((a,b) => {
+                    const valA = a.urutan_per_kelas && a.urutan_per_kelas[selKelas] !== undefined ? a.urutan_per_kelas[selKelas] : a.urutan;
+                    const valB = b.urutan_per_kelas && b.urutan_per_kelas[selKelas] !== undefined ? b.urutan_per_kelas[selKelas] : b.urutan;
+                    return valA - valB;
+                });
             }, [data.mapel, selKelas, guruProfiles, user.role]);
 
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
@@ -1137,7 +1210,7 @@
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Leger Nilai</h2><button onClick={downloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Download Excel</button></div>
-                    <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan}. {m.nama}</option>)}</select></div>
+                    <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : m.urutan}. {m.nama}</option>)}</select></div>
                     {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th>{!isKelas12 && <th className="p-3 w-16">STS</th>}<th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const sts = parseInt(val.sts) || 0; const sas = parseInt(val.sas) || 0; const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts + sas) / 3); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td>{!isKelas12 && <td className="p-3">{val.sts||'-'}</td>}<td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
                 </div>
             );
@@ -1214,17 +1287,32 @@
                  let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C';
                  return { rerata, akhir, predikat };
             };
-            const sortedMapel = (mapel || []).filter(m => { if(m.aktif === false) return false; if(m.kelas && m.kelas.length > 0 && !m.kelas.includes(siswa.kelas)) return false; return true; }).sort((a,b) => a.urutan - b.urutan);
+
+            const getProp = (m, prop) => m[`${prop}_per_kelas`] && m[`${prop}_per_kelas`][siswa.kelas] !== undefined ? m[`${prop}_per_kelas`][siswa.kelas] : m[prop];
+
+            const sortedMapel = (mapel || []).filter(m => { 
+                if(m.aktif === false) return false; 
+                if(m.kelas && m.kelas.length > 0 && !m.kelas.includes(siswa.kelas)) return false; 
+                return true; 
+            }).sort((a,b) => getProp(a, 'urutan') - getProp(b, 'urutan'));
+            
             const processedParents = new Set();
+            
             const renderRow = (m) => {
                 const val = (nilaiMapel || []).find(n => String(n.siswa_id) === String(siswa.id) && String(n.mapel_id) === String(m.id)) || {}; 
                 const score = calcScore(val);
-                return (<tr key={m.id}><td className="text-center">{m.urutan}</td><td className="pl-1 truncate max-w-[150px]">{m.nama}</td><td className="text-center">{m.kkm}</td><td className="text-center">{val.s1||'-'}</td><td className="text-center">{val.s2||'-'}</td><td className="text-center">{val.s3||'-'}</td><td className="text-center">{val.s4||'-'}</td><td className="text-center">{val.s5||'-'}</td><td className="text-center font-bold bg-white">{score.rerata||''}</td>{!isKelas12 && <td className="text-center">{val.sts||'-'}</td>}<td className="text-center font-bold bg-white">{score.akhir||''}</td><td className="text-center">{score.predikat}</td></tr>);
+                const mUrutan = getProp(m, 'urutan');
+                const mKkm = getProp(m, 'kkm');
+
+                return (<tr key={m.id}><td className="text-center">{mUrutan}</td><td className="pl-1 truncate max-w-[150px]">{m.nama}</td><td className="text-center">{mKkm}</td><td className="text-center">{val.s1||'-'}</td><td className="text-center">{val.s2||'-'}</td><td className="text-center">{val.s3||'-'}</td><td className="text-center">{val.s4||'-'}</td><td className="text-center">{val.s5||'-'}</td><td className="text-center font-bold bg-white">{score.rerata||''}</td>{!isKelas12 && <td className="text-center">{val.sts||'-'}</td>}<td className="text-center font-bold bg-white">{score.akhir||''}</td><td className="text-center">{score.predikat}</td></tr>);
             };
+
             const renderGroupWithHeader = (grp, title) => {
-                const groupItems = sortedMapel.filter(m => m.kelompok === grp); if (groupItems.length === 0) return null; 
-                return (<React.Fragment key={grp}><tr className="font-bold"><td colSpan={isKelas12 ? "11" : "12"} className="pl-2 py-0.5 text-[11px]">{title}</td></tr>{groupItems.map(m => { const mParent = m.parent_per_kelas && m.parent_per_kelas[siswa.kelas] !== undefined ? m.parent_per_kelas[siswa.kelas] : m.parent; if (mParent) { if (!processedParents.has(mParent)) { processedParents.add(mParent); return <React.Fragment key={`grp-${mParent}`}><tr className="bg-white font-bold italic"><td colSpan={isKelas12 ? "11" : "12"} className="pl-2 py-0.5 text-[11px]">{mParent}</td></tr>{renderRow(m)}</React.Fragment>; } return renderRow(m); } return renderRow(m); })}</React.Fragment>);
+                const groupItems = sortedMapel.filter(m => getProp(m, 'kelompok') === grp); 
+                if (groupItems.length === 0) return null; 
+                return (<React.Fragment key={grp}><tr className="font-bold"><td colSpan={isKelas12 ? "11" : "12"} className="pl-2 py-0.5 text-[11px]">{title}</td></tr>{groupItems.map(m => { const mParent = getProp(m, 'parent') || ''; if (mParent) { if (!processedParents.has(mParent)) { processedParents.add(mParent); return <React.Fragment key={`grp-${mParent}`}><tr className="bg-white font-bold italic"><td colSpan={isKelas12 ? "11" : "12"} className="pl-2 py-0.5 text-[11px]">{mParent}</td></tr>{renderRow(m)}</React.Fragment>; } return renderRow(m); } return renderRow(m); })}</React.Fragment>);
             };
+
             const myEkskulList = (nilaiEkskul || []).filter(n => String(n.siswa_id) === String(siswa.id)).map(n => { const ref = (ekskulRef || []).find(e => String(e.id) === String(n.ekskul_id)); return { nama: ref?.nama || '-', predikat: n.predikat }; });
             return (
                 <div className="w-full h-full bg-white text-black p-0 page-break relative text-[11pt]">
