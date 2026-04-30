@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro v6.10 - SMAS AL-MULTAZAM</title>
+    <title>e-Rapor Pro v6.18 - SMAS AL-MULTAZAM</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -31,8 +31,10 @@
     </script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Amiri:wght@400;700&display=swap');
+        
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .font-pegon { font-family: 'Amiri', serif; }
         
         /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -43,15 +45,25 @@
 
         /* Print Styling */
         @media print {
-            @page { size: A4; margin: 0.5cm; }
-            html, body { height: auto; overflow: visible !important; }
-            body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 11pt; line-height: 1.15; color: #000000 !important; }
+            @page { size: A4; margin: 1cm; }
+            html, body { height: auto; overflow: visible !important; background: white; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #000000 !important; }
             * { color: #000000 !important; border-color: #000000 !important; }
             .no-print { display: none !important; }
             .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
             .page-break { page-break-after: always; break-after: always; display: block; width: 100%; clear: both; }
+            
+            /* Table Umum */
             .print-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
             .print-table th, .print-table td { border: 1px solid black !important; padding: 2px 4px; }
+            
+            /* Table Khusus Pondok (Identik PDF & Excel-like) */
+            .print-table-pondok { width: 100%; border-collapse: collapse; font-size: 13pt; text-align: center; }
+            .print-table-pondok th { border: 1.5px solid black !important; padding: 8px 6px; font-weight: bold; background-color: #f8fafc !important; }
+            .print-table-pondok td { border: 1.5px solid black !important; padding: 6px; }
+            
+            /* Utility untuk teks vertikal di absensi */
+            .vertical-text { writing-mode: vertical-rl; text-align: center; }
         }
         .print-only { display: none; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -69,7 +81,6 @@
         import { getFirestore, doc, onSnapshot, setDoc, collection } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 
-        // --- KONFIGURASI FIREBASE ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyDrVZSb2iBCFA9GLKE1bbjGQUMOP_oVaKA",
             authDomain: "eraporaltaz.firebaseapp.com",
@@ -82,7 +93,6 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        
         const APP_ID_DB = typeof __app_id !== 'undefined' ? __app_id : 'smas-almultazam-db'; 
 
         const initAuth = async () => {
@@ -106,6 +116,90 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
+        // --- TRANSLITERASI PEGON & ARABIC TOOLS ---
+        const stripGelar = (name) => {
+            if (!name) return '';
+            return name.split(',')[0].trim(); 
+        };
+
+        const toPegon = (text) => {
+            if (!text) return '';
+            if (/[\u0600-\u06FF]/.test(text)) return text; 
+
+            const dict = {
+                'ng':'ڠ', 'ny':'ۑ', 'sy':'ش', 'kh':'خ', 'sh':'ص', 'th':'ط', 'dh':'ض', 'dz':'ذ', 'gh':'غ', 'ch':'ح',
+                'c':'چ', 'p':'ڤ', 'g':'گ', 'v':'ۏ', 'q':'ق', 'x':'كس', 'z':'ز',
+                'b':'ب', 'd':'د', 'f':'ف', 'h':'ه', 'j':'ج', 'k':'ك', 'l':'ل', 'm':'م', 'n':'ن', 'r':'ر', 's':'س', 't':'ت', 'w':'و', 'y':'ي',
+                'a':'ا', 'i':'ي', 'u':'و', 'e':'ي', 'o':'و'
+            };
+            let res = text.toLowerCase();
+            for (let [lat, peg] of Object.entries(dict)) {
+                res = res.split(lat).join(peg);
+            }
+            return res;
+        };
+
+        const toArabicNum = (num) => String(num).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+
+        // Terbilang Arab Berharakat Khusus Ratusan-Ribuan
+        const toArabicWord = (num) => {
+            const n = parseInt(num);
+            if (isNaN(n) || n === 0) return '-';
+            
+            const satuan = ['', 'وَاحِدٌ', 'اِثْنَانِ', 'ثَلَاثَةٌ', 'أَرْبَعَةٌ', 'خَمْسَةٌ', 'سِتَّةٌ', 'سَبْعَةٌ', 'ثَمَانِيَةٌ', 'تِسْعَةٌ'];
+            const puluhan = ['', 'عَشَرَةٌ', 'عِشْرُوْنَ', 'ثَلَاثُوْنَ', 'أَرْبَعُوْنَ', 'خَمْسُوْنَ', 'سِتُّوْنَ', 'سَبْعُوْنَ', 'ثَمَانُوْنَ', 'تِسْعُوْنَ'];
+            const belasan = ['عَشَرَةٌ', 'أَحَدَ عَشَرَ', 'اِثْنَا عَشَرَ', 'ثَلَاثَةَ عَشَرَ', 'أَرْبَعَةَ عَشَرَ', 'خَمْسَةَ عَشَرَ', 'سِتَّةَ عَشَرَ', 'سَبْعَةَ عَشَرَ', 'ثَمَانِيَةَ عَشَرَ', 'تِسْعَةَ عَشَرَ'];
+            const ratusan = ['', 'مِائَةٌ', 'مِائَتَانِ', 'ثَلَاثُمِائَةٍ', 'أَرْبَعُمِائَةٍ', 'خَمْسُمِائَةٍ', 'سِتُّمِائَةٍ', 'سَبْعُمِائَةٍ', 'ثَمَانُمِائَةٍ', 'تِسْعُمِائَةٍ'];
+            const ribuan = ['', 'أَلْفٌ', 'أَلْفَانِ', 'ثَلَاثَةُ آلَافٍ', 'أَرْبَعَةُ آلَافٍ', 'خَمْسَةُ آلَافٍ', 'سِتَّةُ آلَافٍ', 'سَبْعَةُ آلَافٍ', 'ثَمَانِيَةُ آلَافٍ', 'تِسْعَةُ آلَافٍ'];
+
+            let res = [];
+            let rib = Math.floor(n / 1000);
+            let rem = n % 1000;
+            let rat = Math.floor(rem / 100);
+            rem = rem % 100;
+            let pul = Math.floor(rem / 10);
+            let sat = rem % 10;
+
+            if (rib > 0) res.push(ribuan[rib]);
+            if (rat > 0) res.push(ratusan[rat]);
+
+            if (rem >= 11 && rem <= 19) {
+                res.push(belasan[rem - 10]);
+            } else {
+                let parts = [];
+                if (sat > 0 && pul > 0) {
+                    parts.push(satuan[sat]);
+                    parts.push(puluhan[pul]);
+                } else if (sat > 0) {
+                    parts.push(satuan[sat]);
+                } else if (pul > 0) {
+                    parts.push(puluhan[pul]);
+                }
+                if (parts.length > 0) res.push(parts.join(' وَ'));
+            }
+
+            return res.join(' وَ');
+        };
+
+        const mapelToArabic = (nama) => {
+            if (/[\u0600-\u06FF]/.test(nama)) return nama;
+            const dict = {
+                'fiqih': 'فقه', 'akhlak': 'أخلاق', 'aqidah akhlak': 'أخلاق', 
+                'hadits': 'حديث', 'al-qur\'an hadis': 'حديث', 'al qur\'an hadis': 'حديث',
+                'bahasa arab': 'لغة العربية', 'nahwu': 'نحو', 'sharaf': 'صرف', 'sorf': 'صرف'
+            };
+            const lower = nama.toLowerCase().trim();
+            return dict[lower] || toPegon(nama);
+        };
+
+        const getPondokPredicate = (score) => {
+            if (score >= 92) return 'ممتاز'; 
+            if (score >= 81) return 'جيد جدّا'; 
+            if (score >= 70) return 'جيد'; 
+            if (score > 0) return 'مقبول'; 
+            return '-';
+        };
+
         // --- CUSTOM HOOKS ---
         const useStickyState = (defaultValue, key) => {
             const [value, setValue] = useState(() => {
@@ -124,83 +218,51 @@
                 nama: "SMAS AL-MULTAZAM KABUPATEN MOJOKERTO",
                 alamat: "Jl. Raya Kepuhanyar, Mojoanyar, Mojokerto",
                 kepalaSekolah: "Dr. Budi Santoso, M.Kom",
+                kepalaSekolahPegon: "أوسطوانة",
                 nipKepsek: "-",
                 tahunPelajaran: "2025/2026",
                 semester: "Ganjil",
-                website: "www.almultazam.sch.id"
+                website: "www.almultazam.sch.id",
+                tahunHijriah: "١٤٤٦ - ١٤٤٧ هـ"
             },
             users: [
                 { id: 'admin', username: 'admin', password: '123', role: 'admin', nama: 'Administrator' },
                 { id: 'usr-g-1', username: 'guru', password: '123', role: 'guru', nama: 'Retno Wandhira, S.Pd.', nip: '19850101' },
-                { id: 'usr-g-2', username: 'agus', password: '123', role: 'guru', nama: 'Agus Setiawan, S.Kom.', nip: '19900202' },
-                { id: 'usr-g-3', username: 'evirahmawati', password: '123', role: 'guru', nama: 'Evi Rahmawati, S.Pd.', nip: '19950505' },
-                { id: 'siswa1', username: 'siswa', password: '123', role: 'siswa', nama: 'Abel Verisya', nisn: '1035' }
             ],
             siswa: [
-                { id: 1, nisn: '1035', nama: 'ABEL VERISYA RAHMA HUMAIDAH', kelas: 'X-A', fase: 'E', no_absen: 1 },
-                { id: 2, nisn: '1036', nama: 'ADINDA PUTRI', kelas: 'X-A', fase: 'E', no_absen: 2 },
-                { id: 3, nisn: '1037', nama: 'AHMAD ZAINI', kelas: 'XII-A', fase: 'F', no_absen: 3 },
-                { id: 4, nisn: '1038', nama: 'BUDI SANTOSO', kelas: 'XII-B', fase: 'F', no_absen: 1 },
+                { id: 1, nisn: '1035', nama: 'Abel Verisya Rahma', nama_pegon: 'أبيل فيريشا رحمة حميدة', kelas: 'X-A', fase: 'E', no_absen: 1, jenis_kelamin: 'P' },
+                { id: 2, nisn: '1036', nama: 'Ahmad Zaini', nama_pegon: '', kelas: 'X-A', fase: 'E', no_absen: 2, jenis_kelamin: 'L' },
             ],
             guru: [
-                { id: 1, nip: '19850101', nama: 'Retno Wandhira, S.Pd.', mapel: 'Matematika', tugasTambahan: ['Wali Kelas X-A'], kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 2, nip: '19900202', nama: 'Agus Setiawan, S.Kom.', mapel: 'Informatika', tugasTambahan: ['Kepala Sekolah'], kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 3, nip: '19950505', nama: 'Evi Rahmawati, S.Pd.', mapel: 'Bahasa Inggris', tugasTambahan: ['Waka Akademik'], kelasMengajar: ['X-A', 'XII-A', 'XII-B'] },
+                { id: 1, nip: '19850101', nama: 'Retno Wandhira, S.Pd.', mapel: 'Matematika', tugasTambahan: ['Wali Kelas X-A'], kelasMengajar: ['X-A'] },
             ],
             kelas: [
-                { id: 1, nama: 'X-A', tingkat: 'X', jurusan: 'Umum' },
-                { id: 2, nama: 'XII-A', tingkat: 'XII', jurusan: 'MIPA' },
-                { id: 3, nama: 'XII-B', tingkat: 'XII', jurusan: 'IPS' },
+                { id: 1, nama: 'X-A', nama_pegon: '', tingkat: 'X', jurusan: 'Umum' },
             ],
             mapel: [
-                { id: 1, nama: 'Pendidikan Agama Islam', kelompok: 'A', parent: null, kkm: 75, urutan: 1, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 2, nama: 'Pendidikan Pancasila', kelompok: 'A', parent: null, kkm: 75, urutan: 2, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 3, nama: 'Bahasa Indonesia', kelompok: 'A', parent: null, kkm: 75, urutan: 3, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 4, nama: 'Matematika', kelompok: 'A', parent: null, kkm: 70, urutan: 4, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 5, nama: 'Fisika', kelompok: 'A', parent: 'Ilmu Pengetahuan Alam', kkm: 70, urutan: 5, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 6, nama: 'Kimia', kelompok: 'A', parent: 'Ilmu Pengetahuan Alam', kkm: 70, urutan: 6, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 7, nama: 'Biologi', kelompok: 'A', parent: 'Ilmu Pengetahuan Alam', kkm: 70, urutan: 7, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 8, nama: 'Sosiologi', kelompok: 'A', parent: 'Ilmu Pengetahuan Sosial', kkm: 72, urutan: 8, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 9, nama: 'Ekonomi', kelompok: 'A', parent: 'Ilmu Pengetahuan Sosial', kkm: 72, urutan: 9, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 10, nama: 'Sejarah', kelompok: 'A', parent: 'Ilmu Pengetahuan Sosial', kkm: 72, urutan: 10, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 11, nama: 'Geografi', kelompok: 'A', parent: 'Ilmu Pengetahuan Sosial', kkm: 72, urutan: 11, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 12, nama: 'Bahasa Inggris', kelompok: 'A', parent: null, kkm: 75, urutan: 12, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 13, nama: 'PJOK', kelompok: 'A', parent: null, kkm: 75, urutan: 13, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 14, nama: 'Informatika', kelompok: 'A', parent: null, kkm: 75, urutan: 14, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 15, nama: 'Seni Budaya', kelompok: 'A', parent: null, kkm: 75, urutan: 15, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 16, nama: 'Bahasa Daerah', kelompok: 'B', parent: null, kkm: 75, urutan: 16, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 17, nama: 'Bahasa Arab', kelompok: 'C', parent: null, kkm: 75, urutan: 17, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 18, nama: 'Fiqih', kelompok: 'C', parent: null, kkm: 75, urutan: 18, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 19, nama: 'Hadits', kelompok: 'C', parent: null, kkm: 75, urutan: 19, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
-                { id: 20, nama: 'Akhlak', kelompok: 'C', parent: null, kkm: 75, urutan: 20, aktif: true, kelas: ['X-A', 'XII-A', 'XII-B'] },
+                { id: 19, nama: 'Hadits', kelompok: 'C', parent: null, kitab_putra: 'مختار الأحاديث', kitab_putri: 'مختار الأحاديث', kkm: 75, urutan: 1, aktif: true, kelas: ['X-A'] },
+                { id: 20, nama: 'Akhlak', kelompok: 'C', parent: null, kitab_putra: 'أخلاق للبنين', kitab_putri: 'أخلاق للبنات', kkm: 75, urutan: 2, aktif: true, kelas: ['X-A'] },
+                { id: 18, nama: 'Fiqih', kelompok: 'C', parent: null, kitab_putra: 'فتح القريب', kitab_putri: 'فتح القريب', kkm: 75, urutan: 3, aktif: true, kelas: ['X-A'] },
+                { id: 17, nama: 'Bahasa Arab', kelompok: 'C', parent: null, kitab_putra: 'اللغة العربية للبنين', kitab_putri: 'ال لغة العربية', kkm: 75, urutan: 4, aktif: true, kelas: ['X-A'] },
             ],
-            ekskulRef: [
-                { id: 1, nama: 'Pramuka' }, 
-                { id: 2, nama: 'Olimpiade Kimia' }, 
-                { id: 3, nama: 'Futsal' }, 
-                { id: 4, nama: 'Basket' }
-            ],
+            ekskulRef: [{ id: 1, nama: 'Pramuka' }],
             nilaiMapel: [
-                 { siswa_id: 1, mapel_id: 1, s1: 81, s2: 96, s3: 0, s4: 0, s5: 0, sts: 85, sas: 88 }, 
-                 { siswa_id: 1, mapel_id: 5, s1: 80, s2: 86, s3: 84, s4: 0, s5: 0, sts: 59, sas: 75 }, 
-                 { siswa_id: 3, mapel_id: 4, s1: 85, s2: 88, s3: 90, s4: 87, s5: 86, sts: 89, sas: 90, psaj_praktik: 92, psaj_tulis: 90 }
+                 { siswa_id: 1, mapel_id: 19, s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, sts: 0, sas: 83 }, 
+                 { siswa_id: 1, mapel_id: 20, s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, sts: 0, sas: 93 }, 
+                 { siswa_id: 1, mapel_id: 18, s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, sts: 0, sas: 77 }, 
+                 { siswa_id: 1, mapel_id: 17, s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, sts: 0, sas: 80 }
             ],
-            nilaiEkskul: [
-                { id: 1, siswa_id: 1, ekskul_id: 1, predikat: 'B' },
-                { id: 2, siswa_id: 1, ekskul_id: 2, predikat: 'A' },
-            ],
+            nilaiEkskul: [],
             absensi: [
-                { siswa_id: 1, sakit: 10, izin: 1, alpa: 0 }
+                { siswa_id: 1, sakit: 4, izin: 1, alpa: 0 }
             ],
             logo: { 
                 kota: 'Mojokerto', 
-                tgl_rapor: '20 Desember 2025', 
+                kotaPegon: 'مجاكرطا',
+                tgl_rapor: '٢٠ ديسمبر ٢٠٢٥', 
                 wali_kelas: 'Retno Wandhira, S.Pd.',
-                wali_kelas_per_kelas: {
-                    'X-A': 'Retno Wandhira, S.Pd.',
-                    'XII-A': 'Agus Setiawan, S.Kom.',
-                    'XII-B': 'Evi Rahmawati, S.Pd.'
-                },
+                wali_kelas_per_kelas: { 'X-A': 'Retno Wandhira, S.Pd.' },
+                wali_kelas_pegon_per_kelas: { 'X-A': 'ريتنو وانديرا' },
                 image: "https://upload.wikimedia.org/wikipedia/commons/1/1e/Logo_Tut_Wuri_Handayani.svg" 
             }
         };
@@ -459,16 +521,23 @@
             useEffect(() => { setLocalData(data.logo || {}); }, [data.logo]);
             const handleSave = () => { setData(prev => ({...prev, logo: localData})); notify('Konfigurasi Disimpan', 'success'); };
             const classesToEdit = (data.kelas || []).filter(c => !walasFilter || c.nama === walasFilter);
+            
             const handleWalasChange = (className, name) => { setLocalData(prev => ({ ...prev, wali_kelas_per_kelas: { ...(prev.wali_kelas_per_kelas || {}), [className]: name } })); };
+            const handleWalasPegonChange = (className, name) => { setLocalData(prev => ({ ...prev, wali_kelas_pegon_per_kelas: { ...(prev.wali_kelas_pegon_per_kelas || {}), [className]: name } })); };
+
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Logo & Tanda Tangan</h2><button onClick={handleSave} className="bg-secondary text-white px-4 py-2 rounded shadow"><Icon name="save"/> Simpan</button></div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-white p-6 rounded-xl border shadow-sm h-fit">
                             <h3 className="font-bold text-lg mb-4 text-slate-700 border-b pb-2">Pengaturan Umum</h3>
-                            <div className="grid grid-cols-1 gap-4"><FormInput label="Kota" value={localData.kota} onChange={v=>setLocalData(p=>({...p, kota:v}))}/><FormInput label="Tanggal Rapor" value={localData.tgl_rapor} onChange={v=>setLocalData(p=>({...p, tgl_rapor:v}))}/><div><label className="block text-sm font-medium text-slate-700 mb-2">Logo Sekolah (URL Gambar)</label><div className="flex items-start gap-4"><div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center overflow-hidden bg-slate-50 relative shrink-0">{localData.image ? (<img src={localData.image} className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />) : <span className="text-xs text-slate-400">No Logo</span>}</div><div className="flex-1"><input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm mb-2" placeholder="https://example.com/logo.png" value={localData.image || ''} onChange={(e) => setLocalData(p => ({...p, image: e.target.value}))}/><p className="text-xs text-slate-500">Masukkan URL gambar (Direct Link) untuk logo sekolah.</p></div></div></div></div>
+                            <div className="grid grid-cols-1 gap-4">
+                                <FormInput label="Kota (Latin)" value={localData.kota} onChange={v=>setLocalData(p=>({...p, kota:v}))} placeholder="Contoh: Mojokerto"/>
+                                <FormInput label="Kota (Pegon/Arab) - Rapor Pondok" value={localData.kotaPegon} onChange={v=>setLocalData(p=>({...p, kotaPegon:v}))} placeholder="Contoh: مجاكرطا"/>
+                                <FormInput label="Tanggal Rapor (Format Arab)" value={localData.tgl_rapor} onChange={v=>setLocalData(p=>({...p, tgl_rapor:v}))} placeholder="Contoh: ٢٠ ديسمبر ٢٠٢٥"/>
+                                <div><label className="block text-sm font-medium text-slate-700 mb-2">Logo Sekolah (URL Gambar)</label><div className="flex items-start gap-4"><div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center overflow-hidden bg-slate-50 relative shrink-0">{localData.image ? (<img src={localData.image} className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />) : <span className="text-xs text-slate-400">No Logo</span>}</div><div className="flex-1"><input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm mb-2" placeholder="https://example.com/logo.png" value={localData.image || ''} onChange={(e) => setLocalData(p => ({...p, image: e.target.value}))}/><p className="text-xs text-slate-500">Masukkan URL gambar (Direct Link) untuk logo sekolah.</p></div></div></div></div>
                         </div>
-                        <div className="bg-white p-6 rounded-xl border shadow-sm"><div className="flex justify-between items-center mb-4 border-b pb-2"><h3 className="font-bold text-lg text-slate-700">Data Wali Kelas</h3><select className="border p-1.5 rounded text-sm bg-slate-50" value={walasFilter} onChange={e=>setWalasFilter(e.target.value)}><option value="">Semua Kelas</option>{(data.kelas || []).map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}</select></div><div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">{classesToEdit.length > 0 ? classesToEdit.map(c => (<div key={c.id} className="p-3 border rounded-lg bg-slate-50"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Kelas {c.nama}</label><input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-secondary outline-none text-sm" placeholder="Nama Wali Kelas + Gelar" value={(localData.wali_kelas_per_kelas && localData.wali_kelas_per_kelas[c.nama]) || ''} onChange={e => handleWalasChange(c.nama, e.target.value)}/></div>)) : <div className="text-center text-slate-400 py-4">Tidak ada data kelas</div>}</div></div>
+                        <div className="bg-white p-6 rounded-xl border shadow-sm"><div className="flex justify-between items-center mb-4 border-b pb-2"><h3 className="font-bold text-lg text-slate-700">Data Wali Kelas</h3><select className="border p-1.5 rounded text-sm bg-slate-50" value={walasFilter} onChange={e=>setWalasFilter(e.target.value)}><option value="">Semua Kelas</option>{(data.kelas || []).map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}</select></div><div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">{classesToEdit.length > 0 ? classesToEdit.map(c => (<div key={c.id} className="p-3 border rounded-lg bg-slate-50"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Kelas {c.nama}</label><input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-secondary outline-none text-sm mb-2" placeholder="Nama Wali Kelas (Latin)" value={(localData.wali_kelas_per_kelas && localData.wali_kelas_per_kelas[c.nama]) || ''} onChange={e => handleWalasChange(c.nama, e.target.value)}/><input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-secondary outline-none text-sm font-pegon" dir="rtl" placeholder="Nama Wali Kelas (Pegon) - Rapor Pondok" value={(localData.wali_kelas_pegon_per_kelas && localData.wali_kelas_pegon_per_kelas[c.nama]) || ''} onChange={e => handleWalasPegonChange(c.nama, e.target.value)}/></div>)) : <div className="text-center text-slate-400 py-4">Tidak ada data kelas</div>}</div></div>
                     </div>
                 </div>
             );
@@ -481,7 +550,207 @@
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Data Sekolah</h2><button onClick={handleSave} className="bg-secondary text-white px-4 py-2 rounded shadow"><Icon name="save"/> Simpan</button></div>
-                    <div className="bg-white p-6 rounded-xl border shadow-sm grid grid-cols-2 gap-6"><FormInput label="Nama Sekolah" value={localData.nama} onChange={v=>setLocalData(p=>({...p,nama:v}))}/><FormInput label="Kepala Sekolah" value={localData.kepalaSekolah} onChange={v=>setLocalData(p=>({...p,kepalaSekolah:v}))}/><FormInput label="Tahun Pelajaran" value={localData.tahunPelajaran} onChange={v=>setLocalData(p=>({...p,tahunPelajaran:v}))}/><FormInput label="Semester" value={localData.semester} onChange={v=>setLocalData(p=>({...p,semester:v}))}/><div className="col-span-2"><FormInput label="Alamat" value={localData.alamat} onChange={v=>setLocalData(p=>({...p,alamat:v}))}/></div></div>
+                    <div className="bg-white p-6 rounded-xl border shadow-sm grid grid-cols-2 gap-6"><FormInput label="Nama Sekolah (Latin)" value={localData.nama} onChange={v=>setLocalData(p=>({...p,nama:v}))}/><FormInput label="Tahun Pelajaran (Latin)" value={localData.tahunPelajaran} onChange={v=>setLocalData(p=>({...p,tahunPelajaran:v}))}/><FormInput label="Kepala Sekolah (Latin)" value={localData.kepalaSekolah} onChange={v=>setLocalData(p=>({...p,kepalaSekolah:v}))}/><FormInput label="Kepala Sekolah (Pegon) - Rapor Pondok" value={localData.kepalaSekolahPegon} onChange={v=>setLocalData(p=>({...p,kepalaSekolahPegon:v}))}/><FormInput label="Tahun Akademik Hijriah (Untuk Rapor Pondok)" value={localData.tahunHijriah} onChange={v=>setLocalData(p=>({...p,tahunHijriah:v}))} placeholder="Contoh: ١٤٤٦ - ١٤٤٧ هـ"/><FormInput label="Semester" value={localData.semester} onChange={v=>setLocalData(p=>({...p,semester:v}))}/><div className="col-span-2"><FormInput label="Alamat" value={localData.alamat} onChange={v=>setLocalData(p=>({...p,alamat:v}))}/></div></div>
+                </div>
+            );
+        };
+
+        const DataPegonPondok = ({ data, setData, notify }) => {
+            const [kepsek, setKepsek] = useState(data.sekolah?.kepalaSekolahPegon || '');
+            const [kelasBuffer, setKelasBuffer] = useState({});
+            const [siswaBuffer, setSiswaBuffer] = useState({});
+            const [selKelas, setSelKelas] = useState('');
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                setKepsek(data.sekolah?.kepalaSekolahPegon || '');
+                const kBuf = {};
+                (data.kelas || []).forEach(k => {
+                    kBuf[k.id] = {
+                        nama_pegon: k.nama_pegon || '',
+                        wali_kelas_pegon: (data.logo?.wali_kelas_pegon_per_kelas || {})[k.nama] || ''
+                    };
+                });
+                setKelasBuffer(kBuf);
+
+                const sBuf = {};
+                (data.siswa || []).forEach(s => {
+                    sBuf[s.id] = s.nama_pegon || '';
+                });
+                setSiswaBuffer(sBuf);
+            }, [data]);
+
+            const handleSave = () => {
+                setData(prev => {
+                    const next = { ...prev };
+                    
+                    next.sekolah = { ...next.sekolah, kepalaSekolahPegon: kepsek };
+                    
+                    next.kelas = (next.kelas || []).map(k => ({
+                        ...k,
+                        nama_pegon: kelasBuffer[k.id]?.nama_pegon !== undefined ? kelasBuffer[k.id].nama_pegon : k.nama_pegon
+                    }));
+                    
+                    next.logo = { ...next.logo };
+                    next.logo.wali_kelas_pegon_per_kelas = { ...(next.logo.wali_kelas_pegon_per_kelas || {}) };
+                    (next.kelas || []).forEach(k => {
+                        if (kelasBuffer[k.id]?.wali_kelas_pegon !== undefined) {
+                            next.logo.wali_kelas_pegon_per_kelas[k.nama] = kelasBuffer[k.id].wali_kelas_pegon;
+                        }
+                    });
+
+                    next.siswa = (next.siswa || []).map(s => ({
+                        ...s,
+                        nama_pegon: siswaBuffer[s.id] !== undefined ? siswaBuffer[s.id] : s.nama_pegon
+                    }));
+
+                    return next;
+                });
+                notify('Data Pegon Pondok berhasil disimpan!', 'success');
+            };
+
+            const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
+
+            // --- IMPORT & TEMPLATE LOGIC ---
+            const downloadTemplate = () => {
+                if (!selKelas) return notify('Pilih kelas terlebih dahulu', 'error');
+                if (students.length === 0) return notify('Tidak ada siswa di kelas ini', 'error');
+                
+                const headers = [['NOMOR INDUK', 'NAMA LATIN', 'NAMA PEGON']];
+                const rows = students.map(s => [s.nisn, s.nama, siswaBuffer[s.id] !== undefined ? siswaBuffer[s.id] : (s.nama_pegon || '')]);
+                
+                const wb = XLSX.utils.book_new(); 
+                const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]); 
+                XLSX.utils.book_append_sheet(wb, ws, "Data Pegon"); 
+                XLSX.writeFile(wb, `Data_Pegon_${selKelas}.xlsx`);
+            };
+
+            const handleImport = (e) => {
+                const file = e.target.files[0]; 
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const fileData = new Uint8Array(evt.target.result); 
+                    const wb = XLSX.read(fileData, { type: 'array' }); 
+                    const ws = wb.Sheets[wb.SheetNames[0]]; 
+                    const json = XLSX.utils.sheet_to_json(ws);
+                    
+                    let count = 0;
+                    const newSiswaBuffer = { ...siswaBuffer };
+
+                    json.forEach(row => {
+                        const rawNisn = row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn'];
+                        const pegonName = row['NAMA PEGON'] || row['Nama Pegon'] || row['nama pegon'];
+                        
+                        if (!rawNisn || pegonName === undefined) return;
+                        
+                        const nisnStr = String(rawNisn).trim();
+                        const siswa = (data.siswa || []).find(s => String(s.nisn).trim() === nisnStr);
+                        
+                        if (siswa) {
+                            newSiswaBuffer[siswa.id] = String(pegonName).trim();
+                            count++;
+                        }
+                    });
+
+                    setSiswaBuffer(newSiswaBuffer);
+                    notify(`Berhasil memuat ${count} nama Pegon ke draf. Jangan lupa klik SIMPAN!`, 'success');
+                }; 
+                reader.readAsArrayBuffer(file); 
+                e.target.value = null; // Reset input
+            };
+
+            return (
+                <div className="space-y-6 animate-fade">
+                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm">
+                        <div>
+                            <h2 className="text-xl font-bold">Data Khusus Rapor Pondok (Pegon)</h2>
+                            <p className="text-sm text-slate-500">Isi dengan bahasa Arab murni tanpa menyertakan gelar</p>
+                        </div>
+                        <button onClick={handleSave} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition font-medium text-sm">
+                            <Icon name="save" size={16}/> Simpan Perubahan
+                        </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-xl border shadow-sm h-fit">
+                            <h3 className="font-bold text-lg mb-4 border-b pb-2">Kepala Sekolah & Wali Kelas</h3>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium mb-1">Kepala Sekolah (Pegon)</label>
+                                <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 font-pegon text-xl" dir="rtl" value={kepsek} onChange={e => setKepsek(e.target.value)} placeholder="Contoh: أوسطوانة" />
+                            </div>
+                            
+                            <div className="overflow-x-auto mt-6">
+                                <table className="w-full text-sm text-left border">
+                                    <thead className="bg-slate-50 border-b">
+                                        <tr>
+                                            <th className="p-2 border-r">Kelas</th>
+                                            <th className="p-2 border-r">Nama Kelas (Pegon)</th>
+                                            <th className="p-2">Wali Kelas (Pegon)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {(data.kelas || []).map(k => (
+                                            <tr key={k.id}>
+                                                <td className="p-2 font-medium border-r">{k.nama}</td>
+                                                <td className="p-2 border-r"><input type="text" className="w-full border p-1.5 rounded font-pegon text-lg text-right" dir="rtl" value={kelasBuffer[k.id]?.nama_pegon || ''} onChange={e => setKelasBuffer(p => ({...p, [k.id]: {...p[k.id], nama_pegon: e.target.value}}))} placeholder={toArabicNum(k.nama)} /></td>
+                                                <td className="p-2"><input type="text" className="w-full border p-1.5 rounded font-pegon text-lg text-right" dir="rtl" value={kelasBuffer[k.id]?.wali_kelas_pegon || ''} onChange={e => setKelasBuffer(p => ({...p, [k.id]: {...p[k.id], wali_kelas_pegon: e.target.value}}))} placeholder="Nama Walas Pegon" /></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-xl border shadow-sm">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 border-b pb-2 gap-3">
+                                <h3 className="font-bold text-lg">Nama Siswa (Pegon)</h3>
+                                <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+                                    {selKelas && (
+                                        <>
+                                            <button onClick={downloadTemplate} className="bg-slate-600 text-white px-3 py-1.5 rounded flex gap-1 shadow hover:bg-slate-700 transition items-center font-medium text-xs">
+                                                <Icon name="download" size={14}/> Format
+                                            </button>
+                                            <button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-1.5 rounded flex gap-1 shadow hover:bg-emerald-700 transition items-center font-medium text-xs">
+                                                <Icon name="upload" size={14}/> Import
+                                            </button>
+                                            <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
+                                        </>
+                                    )}
+                                    <select className="border p-1.5 rounded text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto" value={selKelas} onChange={e=>setSelKelas(e.target.value)}>
+                                        <option value="">Pilih Kelas</option>
+                                        {(data.kelas || []).map(c => <option key={c.id} value={c.nama}>{c.nama}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            {selKelas ? (
+                                <div className="overflow-x-auto max-h-[500px]">
+                                    <table className="w-full text-sm text-left border">
+                                        <thead className="bg-slate-50 border-b sticky top-0 z-10">
+                                            <tr>
+                                                <th className="p-2 w-10 border-r">No</th>
+                                                <th className="p-2 border-r">Nama Latin</th>
+                                                <th className="p-2">Nama Pegon (Bisa diedit manual)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {students.map((s, i) => (
+                                                <tr key={s.id} className="hover:bg-slate-50">
+                                                    <td className="p-2 text-center text-slate-500 border-r">{i+1}</td>
+                                                    <td className="p-2 font-medium border-r text-xs">{s.nama}</td>
+                                                    <td className="p-2">
+                                                        <input type="text" className="w-full border p-1.5 rounded font-pegon text-xl focus:ring-2 focus:ring-blue-500 text-right" dir="rtl" value={siswaBuffer[s.id] !== undefined ? siswaBuffer[s.id] : ''} onChange={e => setSiswaBuffer(p => ({...p, [s.id]: e.target.value}))} placeholder={toPegon(s.nama)} />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {students.length === 0 && <tr><td colSpan="3" className="p-4 text-center text-slate-400">Tidak ada siswa</td></tr>}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : <div className="text-center py-10 text-slate-400">Pilih kelas untuk mengatur nama siswa</div>}
+                        </div>
+                    </div>
                 </div>
             );
         };
@@ -527,7 +796,6 @@
                 const newEdits = edits.map(m => {
                     const newMapel = { ...m };
                     
-                    // 1. Copy Status Aktif
                     const isActiveInSource = newMapel.kelas && newMapel.kelas.includes(copySourceClass);
                     let currentClasses = newMapel.kelas || [];
                     
@@ -537,7 +805,6 @@
                         newMapel.kelas = currentClasses.filter(c => c !== selectedClass);
                     }
 
-                    // 2. Copy Properties (Urutan, Kelompok, Parent, KKM)
                     const propsToCopy = ['urutan', 'kelompok', 'parent', 'kkm'];
                     propsToCopy.forEach(prop => {
                         const specificField = `${prop}_per_kelas`;
@@ -668,7 +935,6 @@
                     const mapelId = mapelObj ? mapelObj.id : null;
                     const targetClasses = g.kelasMengajar || [];
                     
-                    // Kalkulasi progress per-kelas untuk guru ini
                     const classStats = targetClasses.map(className => {
                         const studentsInClass = (data.siswa || []).filter(s => s.kelas === className);
                         const total = studentsInClass.length;
@@ -678,7 +944,6 @@
                             studentsInClass.forEach(s => {
                                 const gradeRecord = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelId));
                                 if (gradeRecord) {
-                                    // Siswa dianggap 'dinilai' jika ada salah satu kolom yang terisi angka (termasuk 0, asal bukan kosong '')
                                     const hasGrade = ['s1','s2','s3','s4','s5','sts','sas'].some(k => gradeRecord[k] !== undefined && gradeRecord[k] !== '');
                                     if (hasGrade) filled++;
                                 }
@@ -688,7 +953,6 @@
                         return { className, total, filled, percentage };
                     });
 
-                    // Kalkulasi status keseluruhan untuk guru tersebut
                     const isAllDone = classStats.length > 0 && classStats.every(cs => cs.percentage === 100);
                     const isAnyStarted = classStats.some(cs => cs.percentage > 0);
                     const overallStatus = isAllDone ? 'SELESAI' : isAnyStarted ? 'PROSES' : 'KOSONG';
@@ -1171,9 +1435,10 @@
                     const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {};
                     const sum = [val.s1, val.s2, val.s3, val.s4, val.s5].map(v => parseInt(v) || 0).filter(v => v > 0);
                     const rerata = sum.length ? Math.round(sum.reduce((a, b) => a + b, 0) / sum.length) : 0;
-                    const sts = parseInt(val.sts) || 0;
-                    const sas = parseInt(val.sas) || 0;
-                    const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts + sas) / 3);
+                    
+                    const stsVal = parseInt(val.sts) || 0;
+                    const sasVal = parseInt(val.sas) || 0;
+                    const akhir = isKelas12 ? Math.round((rerata + sasVal) / 2) : Math.round((rerata + stsVal + sasVal) / 3);
                     
                     let predikat = 'D';
                     if (akhir >= 92) predikat = 'A';
@@ -1211,17 +1476,16 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Leger Nilai</h2><button onClick={downloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Download Excel</button></div>
                     <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th>{!isKelas12 && <th className="p-3 w-16">STS</th>}<th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const sts = parseInt(val.sts) || 0; const sas = parseInt(val.sas) || 0; const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts + sas) / 3); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td>{!isKelas12 && <td className="p-3">{val.sts||'-'}</td>}<td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
+                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th>{!isKelas12 && <th className="p-3 w-16">STS</th>}<th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const stsVal = parseInt(val.sts) || 0; const sasVal = parseInt(val.sas) || 0; const akhir = isKelas12 ? Math.round((rerata + sasVal) / 2) : Math.round((rerata + stsVal + sasVal) / 3); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td>{!isKelas12 && <td className="p-3">{val.sts||'-'}</td>}<td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
                 </div>
             );
         };
 
-        const CetakRaporSisipan = ({ data, handlePrint, user }) => {
+        const CetakRaporSelector = ({ data, handlePrint, user, type }) => {
             const [selKelas, setSelKelas] = useState(''); 
             
             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
-                
                 let profiles = [];
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
@@ -1257,12 +1521,14 @@
 
             useEffect(() => { if (availableClasses.length === 1 && !selKelas) { setSelKelas(availableClasses[0].nama); } }, [availableClasses, selKelas]);
             const students = useMemo(() => selKelas ? (data.siswa || []).filter(s => s.kelas === selKelas) : [], [data.siswa, selKelas]);
+            const title = type === 'pondok' ? 'Cetak Rapor Pondok (Pegon)' : 'Cetak Rapor Akademik';
+            
             return (
                 <div className="space-y-6 animate-fade">
-                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Rapor Sisipan</h2></div>
+                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">{title}</h2></div>
                     <div className="bg-white p-6 rounded-xl border shadow-sm">
                         <div className="mb-6 max-w-xs"><label className="block text-sm font-medium text-slate-700 mb-1">Pilih Kelas</label><select className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={selKelas} onChange={e => setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{availableClasses.map(k => (<option key={k.id} value={k.nama}>{k.nama}</option>))}</select></div>
-                        {selKelas && (<div className="animate-fade space-y-6"><div><h3 className="font-bold text-lg text-slate-800 mb-3">Daftar Siswa</h3><div className="border rounded-lg overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 w-12 text-center">No</th><th className="p-3">Nomor Induk</th><th className="p-3">Nama Siswa</th><th className="p-3 text-right">Aksi</th></tr></thead><tbody className="divide-y">{students.length > 0 ? students.map((s, i) => (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-center text-slate-500">{i+1}</td><td className="p-3">{s.nisn}</td><td className="p-3 font-medium">{s.nama}</td><td className="p-3 text-right"><button onClick={() => handlePrint([s])} className="bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded hover:bg-slate-50 transition text-xs font-medium inline-flex items-center gap-1"><Icon name="printer" size={14}/> Cetak</button></td></tr>)) : (<tr><td colSpan="4" className="p-6 text-center text-slate-400">Tidak ada siswa di kelas ini.</td></tr>)}</tbody></table></div></div></div>)}
+                        {selKelas && (<div className="animate-fade space-y-6"><div><h3 className="font-bold text-lg text-slate-800 mb-3">Daftar Siswa</h3><div className="border rounded-lg overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 w-12 text-center">No</th><th className="p-3">Nomor Induk</th><th className="p-3">Nama Siswa</th><th className="p-3 text-center">L/P</th><th className="p-3 text-right">Aksi</th></tr></thead><tbody className="divide-y">{students.length > 0 ? students.map((s, i) => (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-center text-slate-500">{i+1}</td><td className="p-3">{s.nisn}</td><td className="p-3 font-medium">{s.nama}</td><td className="p-3 text-center">{s.jenis_kelamin || '-'}</td><td className="p-3 text-right"><button onClick={() => handlePrint([s], type)} className="bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded hover:bg-slate-50 transition text-xs font-medium inline-flex items-center gap-1"><Icon name="printer" size={14}/> Cetak {type === 'pondok' ? 'Pondok' : ''}</button></td></tr>)) : (<tr><td colSpan="5" className="p-6 text-center text-slate-400">Tidak ada siswa di kelas ini.</td></tr>)}</tbody></table></div></div></div>)}
                     </div>
                 </div>
             );
@@ -1272,7 +1538,6 @@
             const { sekolah, mapel, nilaiMapel, ekskulRef, nilaiEkskul, absensi, logo } = data;
             const myAbsen = (absensi || []).find(a => String(a.siswa_id) === String(siswa.id)) || {sakit:'',izin:'',alpa:''};
             const waliKelasName = ((logo || {}).wali_kelas_per_kelas && (logo || {}).wali_kelas_per_kelas[siswa.kelas]) || (logo || {}).wali_kelas || "Wali Kelas";
-            
             const isKelas12 = siswa.kelas && (siswa.kelas.toUpperCase().startsWith('XII') || siswa.kelas.startsWith('12'));
 
             const calcScore = (val) => {
@@ -1280,19 +1545,23 @@
                  const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0);
                  const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : '';
                  
-                 if (rerata === '' && !val.sts) return { rerata:'', akhir:'', predikat:'-' };
+                 const stsVal = parseInt(val.sts) || 0;
+                 const sasVal = parseInt(val.sas) || 0;
+                 
+                 if (rerata === '' && stsVal === 0 && sasVal === 0) return { rerata:'', akhir:'', predikat:'-' };
                  
                  const realRerata = rerata === '' ? 0 : rerata;
-                 const akhir = isKelas12 ? realRerata : Math.round((realRerata + (parseInt(val.sts)||0)) / 2);
+                 const akhir = isKelas12 ? Math.round((realRerata + sasVal) / 2) : Math.round((realRerata + stsVal + sasVal) / 3);
+                 
                  let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C';
                  return { rerata, akhir, predikat };
             };
 
             const getProp = (m, prop) => m[`${prop}_per_kelas`] && m[`${prop}_per_kelas`][siswa.kelas] !== undefined ? m[`${prop}_per_kelas`][siswa.kelas] : m[prop];
-
             const sortedMapel = (mapel || []).filter(m => { 
                 if(m.aktif === false) return false; 
-                if(m.kelas && m.kelas.length > 0 && !m.kelas.includes(siswa.kelas)) return false; 
+                // PERBAIKAN: Hanya muncul jika ada di mapping kelas
+                if(!m.kelas || !m.kelas.includes(siswa.kelas)) return false; 
                 return true; 
             }).sort((a,b) => getProp(a, 'urutan') - getProp(b, 'urutan'));
             
@@ -1303,7 +1572,6 @@
                 const score = calcScore(val);
                 const mUrutan = getProp(m, 'urutan');
                 const mKkm = getProp(m, 'kkm');
-
                 return (<tr key={m.id}><td className="text-center">{mUrutan}</td><td className="pl-1 truncate max-w-[150px]">{m.nama}</td><td className="text-center">{mKkm}</td><td className="text-center">{val.s1||'-'}</td><td className="text-center">{val.s2||'-'}</td><td className="text-center">{val.s3||'-'}</td><td className="text-center">{val.s4||'-'}</td><td className="text-center">{val.s5||'-'}</td><td className="text-center font-bold bg-white">{score.rerata||''}</td>{!isKelas12 && <td className="text-center">{val.sts||'-'}</td>}<td className="text-center font-bold bg-white">{score.akhir||''}</td><td className="text-center">{score.predikat}</td></tr>);
             };
 
@@ -1325,6 +1593,221 @@
             );
         }
 
+        const PrintRaporPondok = ({ data, siswa }) => {
+            const { sekolah, mapel, nilaiMapel, absensi, logo } = data;
+            const myAbsen = (absensi || []).find(a => String(a.siswa_id) === String(siswa.id)) || {sakit:0,izin:0,alpa:0};
+            
+            const waliKelasName = ((logo || {}).wali_kelas_per_kelas && (logo || {}).wali_kelas_per_kelas[siswa.kelas]) || (logo || {}).wali_kelas || "Wali Kelas";
+            const waliKelasPegonName = ((logo || {}).wali_kelas_pegon_per_kelas && (logo || {}).wali_kelas_pegon_per_kelas[siswa.kelas]) || toPegon(stripGelar(waliKelasName));
+            const kepsekPegonName = sekolah.kepalaSekolahPegon || toPegon(stripGelar(sekolah.kepalaSekolah));
+            const siswaPegonName = siswa.nama_pegon || toPegon(siswa.nama);
+            
+            const kelasObj = (data.kelas || []).find(k => k.nama === siswa.kelas);
+            const kelasPegonName = kelasObj?.nama_pegon || toArabicNum(siswa.kelas);
+
+            const isPutra = (siswa.jenis_kelamin || '').toUpperCase() === 'L';
+            const getProp = (m, prop) => m[`${prop}_per_kelas`] && m[`${prop}_per_kelas`][siswa.kelas] !== undefined ? m[`${prop}_per_kelas`][siswa.kelas] : m[prop];
+
+            // Filter Mapel Pondok
+            const pondokMapelsForAll = (mapel || []).filter(m => getProp(m, 'kelompok') === 'C' && m.aktif !== false);
+            const pondokMapels = pondokMapelsForAll.filter(m => { 
+                // PERBAIKAN: Hanya muncul jika ada di mapping kelas
+                if(!m.kelas || !m.kelas.includes(siswa.kelas)) return false; 
+                return true;
+            }).sort((a,b) => getProp(a, 'urutan') - getProp(b, 'urutan'));
+
+            // PERBAIKAN: Hitung Total & Rata-rata KHUSUS Mapel Pondok
+            let totalScore = 0;
+            pondokMapels.forEach(m => {
+                const val = (nilaiMapel || []).find(n => String(n.siswa_id) === String(siswa.id) && String(n.mapel_id) === String(m.id)) || {}; 
+                totalScore += parseInt(val.sas) || 0;
+            });
+            const totalMapel = pondokMapels.length;
+            const avgScore = totalMapel > 0 ? Math.round(totalScore / totalMapel) : 0;
+            const predikatTotal = getPondokPredicate(avgScore);
+
+            // Menghitung Rank (طباقة المهارة)
+            const studentsInClass = (data.siswa || []).filter(s => s.kelas === siswa.kelas);
+            const classScores = studentsInClass.map(s => {
+                let tScore = 0;
+                pondokMapels.forEach(mapelItem => {
+                    const val = (nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelItem.id)) || {};
+                    tScore += parseInt(val.sas) || 0;
+                });
+                return { id: s.id, score: tScore };
+            });
+            classScores.sort((a, b) => b.score - a.score);
+            const rankIndex = classScores.findIndex(s => String(s.id) === String(siswa.id)) + 1;
+            const rankArabic = rankIndex > 0 ? toArabicNum(rankIndex) : '-';
+            const rankWord = rankIndex > 0 ? toArabicWord(rankIndex) : '-';
+
+            // Logika Penentuan Semester Arab
+            const semesterArab = (sekolah.semester || '').toLowerCase() === 'genap' ? 'الثاني' : 'الأول';
+
+            // Memastikan jumlah baris minimal 10 seperti PDF
+            const paddedMapels = [...pondokMapels];
+            while (paddedMapels.length < 10) {
+                paddedMapels.push({ id: `empty-${paddedMapels.length}`, isEmpty: true });
+            }
+
+            const midPoint = Math.ceil(paddedMapels.length / 2);
+
+            const renderRow = (m, i) => {
+                const isTopHalf = i === 0;
+                const isBottomHalf = i === midPoint;
+
+                if (m.isEmpty) {
+                    return (
+                        <tr key={m.id} className="h-10">
+                            <td className="border-black"></td>
+                            <td className="border-black"></td>
+                            <td className="border-black"></td>
+                            <td className="border-black"></td>
+                            <td className="border-black"></td>
+                            {isTopHalf && <td rowSpan={midPoint} className="align-top text-right p-3 relative bg-white border-black w-[15%]">
+                                <span className="absolute top-2 right-2 text-[10pt]">والي الفصل :</span>
+                                <span className="absolute bottom-4 left-0 right-0 text-center font-bold text-[13pt]">{waliKelasPegonName}</span>
+                            </td>}
+                            {isBottomHalf && <td rowSpan={paddedMapels.length - midPoint} className="align-top text-right p-3 relative bg-white border-black">
+                                <span className="absolute top-2 right-2 text-[10pt]">الوالي :</span>
+                                <div className="absolute bottom-5 left-2 right-2 border-b border-black"></div>
+                            </td>}
+                        </tr>
+                    );
+                }
+
+                const val = (nilaiMapel || []).find(n => String(n.siswa_id) === String(siswa.id) && String(n.mapel_id) === String(m.id)) || {}; 
+                const sas = parseInt(val.sas) || 0; 
+                
+                const rawKitab = isPutra ? m.kitab_putra : m.kitab_putri;
+                const kitabName = rawKitab ? toPegon(rawKitab) : '-';
+                const mapelName = mapelToArabic(m.nama);
+                const scoreArabic = sas > 0 ? toArabicNum(sas) : '';
+                const scoreWords = sas > 0 ? toArabicWord(sas) : '';
+
+                return (
+                    <tr key={m.id} className="h-10">
+                        <td className="text-center font-bold text-[13pt] border-black">{toArabicNum(i + 1)}</td>
+                        <td className="text-center font-bold text-[14pt] border-black">{kitabName}</td>
+                        <td className="text-center text-[13pt] border-black">{mapelName}</td>
+                        <td className="text-center font-bold text-lg border-black">{scoreArabic}</td>
+                        <td className="text-center font-bold text-[11pt] border-black leading-tight">{scoreWords}</td>
+                        {isTopHalf && <td rowSpan={midPoint} className="align-top text-right p-3 relative bg-white border-black w-[15%]">
+                            <span className="absolute top-2 right-2 text-[10pt]">والي الفصل :</span>
+                            <span className="absolute bottom-4 left-0 right-0 text-center font-bold text-[13pt]">{waliKelasPegonName}</span>
+                        </td>}
+                        {isBottomHalf && <td rowSpan={paddedMapels.length - midPoint} className="align-top text-right p-3 relative bg-white border-black">
+                            <span className="absolute top-2 right-2 text-[10pt]">الوالي :</span>
+                            <div className="absolute bottom-5 left-2 right-2 border-b border-black"></div>
+                        </td>}
+                    </tr>
+                );
+            };
+
+            return (
+                <div className="w-full h-full bg-white text-black p-2 page-break relative font-pegon text-[13pt]" dir="rtl">
+                    <div className="text-center mb-6 pb-2">
+                        <h1 className="text-[22pt] mb-2 font-bold text-black tracking-wide">كشف درجات الامتحان للفصل الدراسي {semesterArab}</h1>
+                        <h2 className="text-[13pt] text-black font-sans font-semibold" dir="ltr">عام الدراسي {toArabicNum((sekolah.tahunPelajaran||'').replace(/\//g, '/'))} م / {sekolah.tahunHijriah || '١٤٤٦ - ١٤٤٧ هـ'}</h2>
+                    </div>
+
+                    <div className="flex justify-between mb-4 text-[13pt]">
+                        <table className="w-[60%]">
+                            <tbody>
+                                <tr>
+                                    <td className="w-40 font-bold pb-2">رقم القيد</td>
+                                    <td className="w-6 pb-2">:</td>
+                                    <td className="pb-2 font-bold font-sans text-[14pt]" dir="ltr" style={{textAlign: 'right'}}>{toArabicNum(siswa.nisn)}</td>
+                                </tr>
+                                <tr>
+                                    <td className="font-bold pb-2">اسم الطالب / الطالبة</td>
+                                    <td className="pb-2">:</td>
+                                    <td className="font-bold pb-2 text-[16pt]">{siswaPegonName}</td>
+                                </tr>
+                                <tr>
+                                    <td className="font-bold">المستوى</td>
+                                    <td>:</td>
+                                    <td className="font-bold text-[14pt] text-right">{kelasPegonName}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <table className="print-table-pondok border-2 border-black w-full">
+                        <thead className="bg-slate-50">
+                            <tr>
+                                <th className="w-[5%] border-black text-[12pt]">الرقم</th>
+                                <th className="w-[28%] border-black text-[12pt]">الكتب الدراسية</th>
+                                <th className="w-[17%] border-black text-[12pt]">الفنون</th>
+                                <th className="w-[8%] border-black text-[12pt]">رقما</th>
+                                <th className="w-[27%] border-black text-[12pt]">كتابة</th>
+                                <th className="w-[15%] border-black text-[12pt]">الملاحظة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {/* Baris 1-10: Mapel Pondok & TTD Walas/Ortu */}
+                            {paddedMapels.map((m, i) => renderRow(m, i))}
+                            
+                            {/* Baris 11: Total */}
+                            <tr className="bg-white h-10">
+                                <td colSpan="3" className="text-center font-bold text-[13pt] border-black bg-slate-50">المجموع</td>
+                                <td className="text-lg font-bold border-black">{toArabicNum(totalScore)}</td>
+                                <td className="text-[10pt] font-bold border-black leading-tight">{toArabicWord(totalScore)}</td>
+                                
+                                {/* Area Kiri untuk Tanda Tangan Kepala Sekolah yang menyatu (rowspan=6) */}
+                                <td rowSpan="6" className="align-top border-black p-3 relative bg-white">
+                                    <div className="text-center text-[10pt] mt-1">{logo.kotaPegon ? toPegon(logo.kotaPegon) : 'مجاكرطا'}، {toArabicNum((logo.tgl_rapor||'').replace(/[a-zA-Z]/g, '').trim())}</div>
+                                    <div className="text-center text-[11pt] font-bold mt-2">مدير المدرسة :</div>
+                                    <div className="text-center font-bold text-[14pt] mt-14">{kepsekPegonName}</div>
+                                    
+                                    <div className="absolute bottom-2 left-0 right-0">
+                                        <div className="text-center text-[11pt] font-bold">التقدير :</div>
+                                        <div className="text-center font-bold mt-1 text-[20pt] leading-none mb-2">{predikatTotal}</div>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            {/* Baris 12: Rata-Rata */}
+                            <tr className="bg-white h-10">
+                                <td colSpan="3" className="text-center font-bold text-[13pt] border-black bg-slate-50">النتيجة الوسيطة</td>
+                                <td className="text-lg font-bold border-black">{toArabicNum(avgScore)}</td>
+                                <td className="text-[11pt] font-bold border-black">{toArabicWord(avgScore)}</td>
+                            </tr>
+                            
+                            {/* Baris 13: Thabaqah Al-Maharah */}
+                            <tr className="bg-white h-10">
+                                <td colSpan="3" className="text-center font-bold text-[13pt] border-black bg-slate-50">طباقة المهارة</td>
+                                <td className="text-lg font-bold border-black">{rankArabic}</td>
+                                <td className="text-[11pt] font-bold border-black">{rankWord}</td>
+                            </tr>
+                            
+                            {/* Baris 14: Absensi Sakit */}
+                            <tr className="bg-white h-10">
+                                <td rowSpan="3" className="border-black font-bold bg-slate-50 text-[12pt] align-middle vertical-text">عدم الدخول</td>
+                                <td colSpan="2" className="border-black font-bold text-center bg-slate-50 text-[12pt]">المرض</td>
+                                <td className="border-black font-bold text-lg text-center">{toArabicNum(myAbsen.sakit || '-')}</td>
+                                <td className="border-black font-bold text-center text-[11pt]">أيام</td>
+                            </tr>
+                            
+                            {/* Baris 15: Absensi Izin */}
+                            <tr className="bg-white h-10">
+                                <td colSpan="2" className="border-black font-bold text-center bg-slate-50 text-[12pt]">بعذر</td>
+                                <td className="border-black font-bold text-lg text-center">{toArabicNum(myAbsen.izin || '-')}</td>
+                                <td className="border-black font-bold text-center text-[11pt]">أيام</td>
+                            </tr>
+                            
+                            {/* Baris 16: Absensi Alpa */}
+                            <tr className="bg-white h-10">
+                                <td colSpan="2" className="border-black font-bold text-center bg-slate-50 text-[12pt]">بغير عذر</td>
+                                <td className="border-black font-bold text-lg text-center">{toArabicNum(myAbsen.alpa || '-')}</td>
+                                <td className="border-black font-bold text-center text-[11pt]">أيام</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            );
+        };
+
         // --- MAIN APP COMPONENT ---
         function App() {
             const [activeSemester, setActiveSemester] = useStickyState({ tahun: '2025/2026', semester: 'Ganjil' }, 'erapor_active_sem_v6');
@@ -1338,47 +1821,35 @@
             const [sidebarOpen, setSidebarOpen] = useState(true);
             const [notification, setNotification] = useState(null);
             const [printQueue, setPrintQueue] = useState([]);
+            const [printType, setPrintType] = useState('akademik');
             const [modal, setModal] = useState({ show: false, type: '', data: null });
             const [formData, setFormData] = useState({});
 
             // Sync FB Data
             useEffect(() => { if (fbData && !fbData._isEmpty) setData(fbData); }, [fbData, setData]);
 
-            // Validate login & Admin Protected Initialization
+            // Validate login
             useEffect(() => {
                 if (pendingLogin && fbData && !loading) {
                     if (fbData._isEmpty) {
                         if (pendingLogin.username === 'admin' && pendingLogin.password === '123') {
                             if (confirm(`Database untuk ${pendingLogin.tahun} - ${pendingLogin.semester} masih kosong.\n\nSebagai Admin, apakah Anda ingin menginisialisasi database ini dengan data bawaan (SEED DATA)?`)) {
-                                const initData = {
-                                    ...SEED_DATA,
-                                    sekolah: { ...SEED_DATA.sekolah, tahunPelajaran: pendingLogin.tahun, semester: pendingLogin.semester }
-                                };
+                                const initData = { ...SEED_DATA, sekolah: { ...SEED_DATA.sekolah, tahunPelajaran: pendingLogin.tahun, semester: pendingLogin.semester } };
                                 updateData(initData).then(() => {
                                     setPendingLogin(null);
                                     setUser(initData.users.find(u => u.username === 'admin'));
-                                    notify(`Berhasil menginisialisasi dan masuk ke ${pendingLogin.tahun} - ${pendingLogin.semester}`);
+                                    notify(`Berhasil masuk ke ${pendingLogin.tahun} - ${pendingLogin.semester}`);
                                     setLoginError('');
                                 });
                                 return;
-                            } else {
-                                setLoginError('Inisialisasi dibatalkan oleh Admin.');
-                            }
-                        } else {
-                            setLoginError('Semester ini belum dibuat/kosong. Hubungi Admin untuk membuat semester baru via Manajemen Semester!');
-                        }
+                            } else setLoginError('Inisialisasi dibatalkan oleh Admin.');
+                        } else setLoginError('Semester ini belum dibuat/kosong. Hubungi Admin!');
                         setPendingLogin(null);
                         return;
                     }
-
                     const found = (fbData.users || []).find(u => u.username === pendingLogin.username && u.password === pendingLogin.password);
-                    if (found) {
-                        setUser(found);
-                        notify(`Berhasil masuk ke ${pendingLogin.tahun} - ${pendingLogin.semester}`);
-                        setLoginError('');
-                    } else {
-                        setLoginError('Username atau Password salah untuk semester yang dipilih!');
-                    }
+                    if (found) { setUser(found); notify(`Berhasil masuk`); setLoginError(''); } 
+                    else { setLoginError('Username atau Password salah!'); }
                     setPendingLogin(null);
                 }
             }, [fbData, pendingLogin, loading]);
@@ -1386,7 +1857,6 @@
             const { isWalas, isKepsek, isWakaAkademik, isPanitiaSumatif } = useMemo(() => {
                 let w = false, k = false, a = false, p = false;
                 if (!user || user.role !== 'guru' || !data || data._isEmpty) return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p };
-
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
                 if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
@@ -1400,7 +1870,6 @@
                         const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase();
                         return sameNip || sameName;
                     });
-                    
                     profiles.forEach(g => {
                         if (g.tugasTambahan) {
                             const taskList = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : g.tugasTambahan.split(',');
@@ -1418,26 +1887,34 @@
             }, [user, data]);
 
             const notify = (message, type='success') => setNotification({message, type});
-            const handleLogout = (force = false) => { 
-                if(force === true || confirm('Yakin ingin keluar?')) { 
-                    setUser(null); 
-                    setPage('dashboard'); 
-                } 
+            const handleLogout = (force = false) => { if(force === true || confirm('Yakin ingin keluar?')) { setUser(null); setPage('dashboard'); } };
+            const handlePrint = (studentList, t = 'akademik') => { 
+                if (studentList.length === 0) return notify('Tidak ada siswa di kelas ini', 'error'); 
+                setPrintType(t); 
+                setPrintQueue(studentList); 
+                setTimeout(() => window.print(), 500); 
             };
-            const handlePrint = (studentList) => { if (studentList.length === 0) return notify('Tidak ada siswa di kelas ini', 'error'); setPrintQueue(studentList); setTimeout(() => window.print(), 500); };
             const handleMenuClick = (targetPage) => { setPage(targetPage); if (window.innerWidth < 1024) setSidebarOpen(false); };
-            
-            const handleLoginSubmit = (form) => {
-                setLoginError('');
-                setPendingLogin(form);
-            };
+            const handleLoginSubmit = (form) => { setLoginError(''); setPendingLogin(form); };
 
             const processImport = (event, type) => {
                 const file = event.target.files[0]; if (!file) return;
                 const reader = new FileReader(); reader.onload = (e) => {
                     const fileData = new Uint8Array(e.target.result); const workbook = XLSX.read(fileData, { type: 'array' }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(sheet);
                     updateData(prev => {
-                        if (type === 'siswa') { const newSiswa = json.map(row => ({ id: Date.now() + Math.random(), nisn: String(row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn'] || ''), nama: String(row['NAMA'] || row['nama'] || row['NAMA LENGKAP'] || ''), kelas: String(row['KELAS'] || row['kelas'] || ''), fase: String(row['FASE'] || row['fase'] || 'E'), no_absen: row['NO_ABSEN'] || row['no_absen'] || 0 })).filter(s => s.nama); notify(`Berhasil import ${newSiswa.length} siswa!`, 'success'); return { ...prev, siswa: [...(prev.siswa || []), ...newSiswa] }; } 
+                        if (type === 'siswa') { 
+                            const newSiswa = json.map(row => ({ 
+                                id: Date.now() + Math.random(), 
+                                nisn: String(row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn'] || ''), 
+                                nama: String(row['NAMA'] || row['nama'] || row['NAMA LENGKAP'] || ''), 
+                                kelas: String(row['KELAS'] || row['kelas'] || ''), 
+                                fase: String(row['FASE'] || row['fase'] || 'E'), 
+                                no_absen: row['NO_ABSEN'] || row['no_absen'] || 0,
+                                jenis_kelamin: String(row['JENIS_KELAMIN'] || row['jenis kelamin'] || row['JK'] || row['jk'] || '').toUpperCase().startsWith('L') ? 'L' : 'P'
+                            })).filter(s => s.nama); 
+                            notify(`Berhasil import ${newSiswa.length} siswa!`, 'success'); 
+                            return { ...prev, siswa: [...(prev.siswa || []), ...newSiswa] }; 
+                        } 
                         else if (type === 'guru') { 
                             const newGuru = json.map(row => {
                                 const tugasStr = String(row['TUGAS_TAMBAHAN'] || row['tugas_tambahan'] || '');
@@ -1452,7 +1929,13 @@
                 }; reader.readAsArrayBuffer(file); event.target.value = null;
             };
 
-            const downloadTemplate = (type) => { const wb = XLSX.utils.book_new(); let headers = []; if(type === 'siswa') headers = [['NOMOR INDUK', 'NAMA', 'KELAS', 'FASE', 'NO_ABSEN']]; if(type === 'guru') headers = [['NIP', 'NAMA', 'MAPEL', 'TUGAS_TAMBAHAN']]; const ws = XLSX.utils.aoa_to_sheet(headers); XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, `template_import_${type}.xlsx`); };
+            const downloadTemplate = (type) => { 
+                const wb = XLSX.utils.book_new(); 
+                let headers = []; 
+                if(type === 'siswa') headers = [['NOMOR INDUK', 'NAMA', 'JENIS KELAMIN', 'KELAS', 'FASE', 'NO_ABSEN']]; 
+                if(type === 'guru') headers = [['NIP', 'NAMA', 'MAPEL', 'TUGAS_TAMBAHAN']]; 
+                const ws = XLSX.utils.aoa_to_sheet(headers); XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, `template_import_${type}.xlsx`); 
+            };
 
             const BackupRestore = ({ data, setData, notify }) => {
                 const fileInputRef = useRef(null);
@@ -1466,28 +1949,18 @@
                             if (json.sekolah && json.users && json.siswa) { 
                                 if(confirm("Apakah Anda yakin ingin memulihkan data? Data saat ini akan ditimpa!")) { 
                                     const safeData = {
-                                        ...SEED_DATA,
-                                        ...json,
-                                        sekolah: json.sekolah || SEED_DATA.sekolah,
-                                        users: json.users || [],
-                                        siswa: json.siswa || [],
-                                        guru: json.guru || [],
-                                        kelas: json.kelas || [],
-                                        mapel: json.mapel || [],
-                                        ekskulRef: json.ekskulRef || [],
-                                        nilaiMapel: json.nilaiMapel || [],
-                                        nilaiEkskul: json.nilaiEkskul || [],
-                                        absensi: json.absensi || [],
-                                        logo: json.logo || SEED_DATA.logo
+                                        ...SEED_DATA, ...json,
+                                        sekolah: json.sekolah || SEED_DATA.sekolah, users: json.users || [], siswa: json.siswa || [], guru: json.guru || [],
+                                        kelas: json.kelas || [], mapel: json.mapel || [], ekskulRef: json.ekskulRef || [], nilaiMapel: json.nilaiMapel || [],
+                                        nilaiEkskul: json.nilaiEkskul || [], absensi: json.absensi || [], logo: json.logo || SEED_DATA.logo
                                     };
-                                    setData(safeData); 
-                                    notify("Data berhasil dipulihkan!", "success"); 
+                                    setData(safeData); notify("Data berhasil dipulihkan!", "success"); 
                                 } 
                             } else { notify("Format file backup tidak valid.", "error"); } 
                         } catch (err) { notify("Gagal membaca file backup.", "error"); } 
                     }; reader.readAsText(file); event.target.value = null; 
                 };
-                return (<div className="space-y-6 animate-fade"><h2 className="text-2xl font-bold text-slate-800">Backup & Restore Data</h2><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-between"><div><div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4"><Icon name="download-cloud" size={24}/></div><h3 className="font-bold text-lg mb-2">Backup Data</h3><p className="text-slate-500 text-sm mb-6">Unduh seluruh data aplikasi untuk disimpan sebagai cadangan.</p></div><button onClick={handleBackup} className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition flex items-center justify-center gap-2"><Icon name="download" size={18}/> Download Backup</button></div><div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-between"><div><div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mb-4"><Icon name="upload-cloud" size={24}/></div><h3 className="font-bold text-lg mb-2">Restore Data</h3><p className="text-slate-500 text-sm mb-6">Pulihkan data aplikasi dari file backup JSON. <span className="text-red-500 font-bold">Data saat ini akan ditimpa!</span></p></div><input type="file" ref={fileInputRef} accept=".json" className="hidden" onChange={handleRestore} /><button onClick={() => fileInputRef.current.click()} className="w-full bg-emerald-600 text-white py-2 rounded-lg font-medium hover:bg-emerald-700 transition flex items-center justify-center gap-2"><Icon name="refresh-ccw" size={18}/> Restore Data</button></div></div></div>);
+                return (<div className="space-y-6 animate-fade"><h2 className="text-2xl font-bold text-slate-800">Backup & Restore Data</h2><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-between"><div><div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4"><Icon name="download-cloud" size={24}/></div><h3 className="font-bold text-lg mb-2">Backup Data</h3><p className="text-slate-500 text-sm mb-6">Unduh seluruh data aplikasi untuk disimpan sebagai cadangan.</p></div><button onClick={handleBackup} className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition flex items-center justify-center gap-2"><Icon name="download" size={18}/> Download Backup</button></div><div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-between"><div><div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mb-4"><Icon name="upload-cloud" size={24}/></div><h3 className="font-bold text-lg mb-2">Restore Data</h3><p className="text-slate-500 text-sm mb-6">Pulihkan data aplikasi من file backup JSON. <span className="text-red-500 font-bold">Data saat ini akan ditimpa!</span></p></div><input type="file" ref={fileInputRef} accept=".json" className="hidden" onChange={handleRestore} /><button onClick={() => fileInputRef.current.click()} className="w-full bg-emerald-600 text-white py-2 rounded-lg font-medium hover:bg-emerald-700 transition flex items-center justify-center gap-2"><Icon name="refresh-ccw" size={18}/> Restore Data</button></div></div></div>);
             };
 
             const openModal = (type, item=null) => { setModal({ show:true, type, data:item }); setFormData(item || {}); }
@@ -1522,9 +1995,10 @@
                     case 'data_sekolah': return <DataSekolah data={data} setData={updateData} notify={notify} />;
                     case 'data_logo': return <LogoSetting data={data} setData={updateData} notify={notify} />;
                     case 'data_akun': return <DataAkun data={data} setData={updateData} notify={notify} />;
-                    case 'siswa': return <TableView title="Data Siswa" heads={['Nomor Induk','Nama','Kelas','Fase']} data={data.siswa} searchKeys={['nama','nisn']} filterOptions={data.kelas} filterKey="kelas" renderRow={i=><><td className="p-4">{i.nisn}</td><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.kelas}</td><td className="p-4">{i.fase}</td></>} onAdd={()=>openModal('siswa')} onEdit={d=>openModal('siswa',d)} onDelete={id=>deleteItem('siswa', id)} onImport={(e) => processImport(e, 'siswa')} onDownloadTemplate={() => downloadTemplate('siswa')} />;
+                    case 'data_pegon': return <DataPegonPondok data={data} setData={updateData} notify={notify} />;
+                    case 'siswa': return <TableView title="Data Siswa" heads={['Nomor Induk','Nama','JK','Kelas','Fase']} data={data.siswa} searchKeys={['nama','nisn']} filterOptions={data.kelas} filterKey="kelas" renderRow={i=><><td className="p-4">{i.nisn}</td><td className="p-4 font-bold">{i.nama}</td><td className="p-4 text-center">{i.jenis_kelamin || '-'}</td><td className="p-4">{i.kelas}</td><td className="p-4">{i.fase}</td></>} onAdd={()=>openModal('siswa')} onEdit={d=>openModal('siswa',d)} onDelete={id=>deleteItem('siswa', id)} onImport={(e) => processImport(e, 'siswa')} onDownloadTemplate={() => downloadTemplate('siswa')} />;
                     case 'guru': return <TableView title="Data Guru" heads={['NIP','Nama','Mapel','Tugas','Kelas Mengajar']} data={data.guru} searchKeys={['nama','nip']} renderRow={i=><><td className="p-4">{i.nip}</td><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.mapel}</td><td className="p-4 text-sm">{Array.isArray(i.tugasTambahan) ? (i.tugasTambahan.length > 0 ? i.tugasTambahan.join(', ') : '-') : (i.tugasTambahan || '-')}</td><td className="p-4 text-xs italic">{(i.kelasMengajar||[]).join(', ') || '-'}</td></>} onAdd={()=>openModal('guru')} onEdit={d=>openModal('guru',d)} onDelete={id=>deleteItem('guru', id)} onImport={(e) => processImport(e, 'guru')} onDownloadTemplate={() => downloadTemplate('guru')} />;
-                    case 'mapel': return <TableView title="Data Mapel" heads={['Nama','Kelompok','Kelas']} data={data.mapel} searchKeys={['nama']} filterOptions={data.kelas} filterKey="kelas" renderRow={i=><><td className="p-4 font-medium">{i.nama}</td><td className="p-4 text-center">{i.kelompok}</td><td className="p-4 text-xs italic">{(i.kelas||[]).join(', ') || 'Semua'}</td></>} onAdd={()=>openModal('mapel')} onEdit={d=>openModal('mapel',d)} onDelete={id=>deleteItem('mapel', id)} />;
+                    case 'mapel': return <TableView title="Data Mapel" heads={['Nama','Kel','Kitab Putra','Kitab Putri','Kelas']} data={data.mapel} searchKeys={['nama']} filterOptions={data.kelas} filterKey="kelas" renderRow={i=><><td className="p-4 font-medium">{i.nama}</td><td className="p-4 text-center">{i.kelompok}</td><td className="p-4 font-pegon text-lg text-center" dir="rtl">{i.kitab_putra||'-'}</td><td className="p-4 font-pegon text-lg text-center" dir="rtl">{i.kitab_putri||'-'}</td><td className="p-4 text-xs italic">{(i.kelas||[]).join(', ') || 'Semua'}</td></>} onAdd={()=>openModal('mapel')} onEdit={d=>openModal('mapel',d)} onDelete={id=>deleteItem('mapel', id)} />;
                     case 'kelas': return <TableView title="Data Kelas" heads={['Nama','Tingkat','Jurusan']} data={data.kelas} searchKeys={['nama']} renderRow={i=><><td className="p-4 font-bold">{i.nama}</td><td className="p-4">{i.tingkat}</td><td className="p-4">{i.jurusan}</td></>} onAdd={()=>openModal('kelas')} onEdit={d=>openModal('kelas',d)} onDelete={id=>deleteItem('kelas', id)} />;
                     case 'referensi_ekskul': return <TableView title="Data Ekstrakurikuler" heads={['Nama Kegiatan']} data={data.ekskulRef} searchKeys={['nama']} renderRow={i=><td className="p-4 font-medium">{i.nama}</td>} onAdd={()=>openModal('ekskul')} onEdit={d=>openModal('ekskul',d)} onDelete={id=>deleteItem('ekskulRef', id)} />;
                     case 'mapping': return <MappingRapor dataMapel={data.mapel} classList={data.kelas} setData={updateData} notify={notify} />;
@@ -1532,7 +2006,8 @@
                     case 'input_absensi': return (user.role === 'admin' || isWalas) ? <InputAbsensi data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'input_ekskul': return (user.role === 'admin' || isWalas) ? <InputEkskul data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'cetak_leger': return <CetakLeger data={data} notify={notify} user={user} />;
-                    case 'cetak': return (user.role === 'admin' || isWalas) ? <CetakRaporSisipan data={data} handlePrint={handlePrint} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
+                    case 'cetak': return (user.role === 'admin' || isWalas) ? <CetakRaporSelector data={data} handlePrint={handlePrint} user={user} type="akademik" /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
+                    case 'cetak_pondok': return (user.role === 'admin' || isWalas) ? <CetakRaporSelector data={data} handlePrint={handlePrint} user={user} type="pondok" /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'monitoring': return (user?.role === 'admin' || isKepsek || isWakaAkademik || isPanitiaSumatif) ? <MonitoringNilai data={data} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Pimpinan/Admin/Panitia</div>;
                     case 'manajemen_semester': return user?.role === 'admin' ? <ManajemenSemester data={data} activeSemester={activeSemester} notify={notify} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Admin</div>;
                     case 'backup_restore': return user?.role === 'admin' ? <BackupRestore data={data} setData={updateData} notify={notify} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Admin</div>;
@@ -1554,7 +2029,9 @@
                     {notification && <Toast message={notification.message} type={notification.type} onClose={()=>setNotification(null)} />}
                     <Modal isOpen={modal.show} onClose={()=>setModal({...modal,show:false})} title={modal.data ? 'Edit Data' : 'Tambah Data'}>
                         <div className="space-y-2">
-                             {modal.type === 'siswa' && <><FormInput label="Nomor Induk" value={formData.nisn} onChange={v=>setFormData({...formData,nisn:v})}/><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/><FormInput label="Kelas" value={formData.kelas} onChange={v=>setFormData({...formData,kelas:v})}/></>}
+                             {modal.type === 'siswa' && <><FormInput label="Nomor Induk" value={formData.nisn} onChange={v=>setFormData({...formData,nisn:v})}/><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/>
+                                <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-1">Jenis Kelamin</label><select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={formData.jenis_kelamin || ''} onChange={e=>setFormData({...formData,jenis_kelamin:e.target.value})}><option value="">Pilih</option><option value="L">Laki-Laki (L)</option><option value="P">Perempuan (P)</option></select></div>
+                             <FormInput label="Kelas" value={formData.kelas} onChange={v=>setFormData({...formData,kelas:v})}/></>}
                              
                              {modal.type === 'guru' && (
                                 <>
@@ -1572,13 +2049,18 @@
                                 </>
                              )}
                              
-                             {modal.type === 'mapel' && <><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/><FormInput label="Kelompok" value={formData.kelompok} onChange={v=>setFormData({...formData,kelompok:v})}/><ClassSelector label="Diajarkan di Kelas" availableClasses={data.kelas||[]} selectedClasses={formData.kelas} onChange={v=>setFormData({...formData,kelas:v})}/></>}
+                             {modal.type === 'mapel' && <><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/><FormInput label="Kelompok" value={formData.kelompok} onChange={v=>setFormData({...formData,kelompok:v})}/>
+                                <div className="grid grid-cols-2 gap-4"><FormInput label="Kitab Putra (Pegon/Latin)" value={formData.kitab_putra} onChange={v=>setFormData({...formData,kitab_putra:v})}/><FormInput label="Kitab Putri (Pegon/Latin)" value={formData.kitab_putri} onChange={v=>setFormData({...formData,kitab_putri:v})}/></div>
+                             <ClassSelector label="Diajarkan di Kelas" availableClasses={data.kelas||[]} selectedClasses={formData.kelas} onChange={v=>setFormData({...formData,kelas:v})}/></>}
                              {modal.type === 'kelas' && <><FormInput label="Nama" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/><FormInput label="Jurusan" value={formData.jurusan} onChange={v=>setFormData({...formData,jurusan:v})}/></>}
                              {modal.type === 'ekskul' && <FormInput label="Nama Kegiatan" value={formData.nama} onChange={v=>setFormData({...formData,nama:v})}/>}
                              <button onClick={saveData} className="w-full bg-secondary text-white py-2 rounded font-bold mt-4">Simpan</button>
                         </div>
                     </Modal>
-                    <div className="print-only fixed inset-0 bg-white z-[9999]">{printQueue.map(s => <PrintRapor key={s.id} data={data} siswa={s} />)}</div>
+                    
+                    <div className="print-only fixed inset-0 bg-white z-[9999]">
+                        {printQueue.map(s => printType === 'pondok' ? <PrintRaporPondok key={s.id} data={data} siswa={s} /> : <PrintRapor key={s.id} data={data} siswa={s} />)}
+                    </div>
                     
                     <aside className={`bg-primary text-slate-300 w-64 flex flex-col shadow-2xl transition-all duration-300 no-print ${sidebarOpen ? 'translate-x-0' : '-translate-x-64 absolute h-full z-40'}`}>
                         <div className="h-16 flex items-center px-6 font-bold text-xl tracking-tight text-white border-b border-slate-700">{(data.logo||{}).image ? (<img src={data.logo.image} className="h-8 w-auto mr-2 object-contain" alt="Logo" onError={(e) => e.target.style.display = 'none'} />) : (<span className="text-secondary mr-1">e</span>)} Rapor<span className="font-light opacity-50 ml-1">Pro</span></div>
@@ -1597,6 +2079,7 @@
                                     <button onClick={()=>handleMenuClick('referensi_ekskul')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='referensi_ekskul' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="activity"/> Data Ekskul</button>
                                     <button onClick={()=>handleMenuClick('mapping')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='mapping' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="sliders"/> Mapping Rapor</button>
                                     <button onClick={()=>handleMenuClick('data_logo')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='data_logo' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="pen-tool"/> Logo & TTD</button>
+                                    <button onClick={()=>handleMenuClick('data_pegon')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='data_pegon' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="type"/> Data Pegon Pondok</button>
                                     
                                     <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Sistem</div>
                                     <button onClick={()=>handleMenuClick('manajemen_semester')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='manajemen_semester' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="folder-open"/> Manajemen Semester</button>
@@ -1604,21 +2087,20 @@
                             )}
                             {(user?.role === 'admin' || user?.role === 'guru') && (
                                 <>
-                                    <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Akademik</div>
+                                    <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Akademik & Rapor</div>
                                     <button onClick={()=>handleMenuClick('input_nilai')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='input_nilai' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="pen-tool"/> Input Nilai</button>
                                     <button onClick={()=>handleMenuClick('cetak_leger')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='cetak_leger' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="file-text"/> Cetak Leger</button>
                                     {(user?.role === 'admin' || isWalas) && (
                                         <>
                                             <button onClick={()=>handleMenuClick('input_absensi')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='input_absensi' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="calendar"/> Input Absensi</button>
                                             <button onClick={()=>handleMenuClick('input_ekskul')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='input_ekskul' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="award"/> Input Nilai Ekskul</button>
-                                            <button onClick={()=>handleMenuClick('cetak')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='cetak' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="printer"/> Cetak Rapor Sisipan</button>
+                                            
+                                            <div className="mt-4 mb-2 mx-6 border-t border-slate-700"></div>
+                                            
+                                            <button onClick={()=>handleMenuClick('cetak')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='cetak' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="printer"/> Cetak Rapor Diknas</button>
+                                            <button onClick={()=>handleMenuClick('cetak_pondok')} className={`w-full px-6 py-3 text-left hover:bg-emerald-800 hover:text-emerald-400 transition flex items-center gap-3 ${page==='cetak_pondok' && 'bg-emerald-900 text-emerald-400 border-r-4 border-emerald-500'}`}><Icon name="book-open"/> Cetak Rapor Pondok</button>
                                         </>
                                     )}
-                                    
-                                    <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">E-Rapor Nasional</div>
-                                    <a href="https://erapor2.smasalmultazam-mojokerto.my.id/" target="_blank" rel="noopener noreferrer" className="w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 text-blue-400 font-medium">
-                                        <Icon name="external-link"/> E-Rapor Kemendikdasmen
-                                    </a>
                                 </>
                             )}
                             {(user?.role === 'admin' || isKepsek || isWakaAkademik || isPanitiaSumatif) && (
