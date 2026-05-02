@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro v6.18 - SMAS AL-MULTAZAM JOS JIS</title>
+    <title>e-Rapor Pro Al-Multazam Jos Jis</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -1223,6 +1223,7 @@
 
         const InputEkskul = ({ data, setData, notify, user }) => { 
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
+            const fileInputRef = useRef(null);
             
             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
@@ -1283,10 +1284,89 @@
                 });
                 setBuffer({}); notify('Nilai Ekskul berhasil disimpan!', 'success');
             };
+
+            const downloadTemplate = () => {
+                const siswaKelas = (data.siswa || []).filter(s => s.kelas === selKelas);
+                if (siswaKelas.length === 0) return notify('Tidak ada siswa di kelas ini', 'error');
+                const headers = [['NOMOR INDUK', 'NAMA SISWA', 'EKSKUL 1', 'PREDIKAT 1', 'EKSKUL 2', 'PREDIKAT 2']];
+                const rows = siswaKelas.map(s => [s.nisn, s.nama, '', '', '', '']);
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]);
+                XLSX.utils.book_append_sheet(wb, ws, "Nilai Ekskul");
+                XLSX.writeFile(wb, `Ekskul_${selKelas}.xlsx`);
+            };
+
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const fileData = new Uint8Array(evt.target.result);
+                    const wb = XLSX.read(fileData, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(ws);
+                    let count = 0;
+                    setData(prevData => {
+                        const newNilaiEkskul = [...(prevData.nilaiEkskul || [])];
+                        json.forEach(row => {
+                            const rawNisn = row['NOMOR INDUK'] || row['Nomor Induk'] || row['NISN'] || row['nisn'];
+                            if (!rawNisn) return;
+                            const nisnStr = String(rawNisn).trim();
+                            const siswa = (prevData.siswa || []).find(s => String(s.nisn).trim() === nisnStr);
+                            
+                            if (siswa) {
+                                const getEkskulId = (name) => {
+                                    if (!name) return '';
+                                    const found = (prevData.ekskulRef || []).find(ex => ex.nama.toLowerCase() === String(name).trim().toLowerCase());
+                                    return found ? found.id : '';
+                                };
+                                
+                                const e1 = getEkskulId(row['EKSKUL 1'] || row['Ekskul 1']);
+                                const p1 = row['PREDIKAT 1'] || row['Predikat 1'] || '';
+                                const e2 = getEkskulId(row['EKSKUL 2'] || row['Ekskul 2']);
+                                const p2 = row['PREDIKAT 2'] || row['Predikat 2'] || '';
+                                
+                                const filtered = newNilaiEkskul.filter(n => String(n.siswa_id) !== String(siswa.id));
+                                newNilaiEkskul.length = 0;
+                                newNilaiEkskul.push(...filtered);
+                                
+                                if (e1 && p1) newNilaiEkskul.push({ id: Date.now() + Math.random(), siswa_id: siswa.id, ekskul_id: e1, predikat: p1 });
+                                if (e2 && p2) newNilaiEkskul.push({ id: Date.now() + Math.random() + 1, siswa_id: siswa.id, ekskul_id: e2, predikat: p2 });
+                                
+                                count++;
+                            }
+                        });
+                        return { ...prevData, nilaiEkskul: newNilaiEkskul };
+                    });
+                    setBuffer({});
+                    notify(`Berhasil mengimpor dan menyimpan nilai ekskul untuk ${count} siswa.`, 'success');
+                };
+                reader.readAsArrayBuffer(file);
+                e.target.value = null;
+            };
+
             const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             return (
                 <div className="space-y-6 animate-fade">
-                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Ekstrakurikuler</h2><button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold"><Icon name="save"/> Simpan</button></div>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border shadow-sm gap-4">
+                        <h2 className="text-xl font-bold">Input Nilai Ekstrakurikuler</h2>
+                        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+                            {selKelas && (
+                                <>
+                                    <button onClick={downloadTemplate} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm">
+                                        <Icon name="download" size={16}/> Format
+                                    </button>
+                                    <button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm">
+                                        <Icon name="upload" size={16}/> Import
+                                    </button>
+                                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
+                                </>
+                            )}
+                            <button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm sm:text-base">
+                                <Icon name="save"/> Simpan
+                            </button>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{availableClasses.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select></div>
                     {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 w-1/3">Nama Siswa</th><th className="p-3 text-center bg-slate-100 border-l border-r" colSpan="2">Kegiatan 1</th><th className="p-3 text-center bg-slate-50" colSpan="2">Kegiatan 2</th></tr></thead><tbody className="divide-y">{students.map(s => { return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium border-r">{s.nama}</td>{[0, 1].map(i => (<React.Fragment key={i}><td className={`p-2 ${i===0 ? 'bg-slate-50/50' : ''}`}><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition text-sm" value={getVal(s.id, i, 'id')} onChange={e => setBuffer(prev => ({...prev, [`${s.id}-${i}-id`]: e.target.value}))}><option value="">-</option>{(data.ekskulRef || []).map(e => <option key={e.id} value={e.id}>{e.nama}</option>)}</select></td><td className={`p-2 text-center border-r ${i===0 ? 'bg-slate-50/50' : ''}`}><input type="text" className="w-12 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition uppercase" placeholder="-" maxLength="2" value={getVal(s.id, i, 'predikat')} onChange={e => setBuffer(prev => ({...prev, [`${s.id}-${i}-predikat`]: e.target.value}))}/></td></React.Fragment>))}</tr>) })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input nilai ekskul.</div>}
                 </div>
@@ -1295,6 +1375,7 @@
 
         const InputAbsensi = ({ data, setData, notify, user }) => {
             const [selKelas, setSelKelas] = useState(''); const [buffer, setBuffer] = useState({});
+            const fileInputRef = useRef(null);
             
             const availableClasses = useMemo(() => { 
                 if (user.role === 'admin') return data.kelas || []; 
@@ -1360,10 +1441,81 @@
                 });
                 setBuffer({}); notify('Data Absensi berhasil disimpan!', 'success');
             };
+
+            const downloadTemplate = () => {
+                const siswaKelas = (data.siswa || []).filter(s => s.kelas === selKelas);
+                if (siswaKelas.length === 0) return notify('Tidak ada siswa di kelas ini', 'error');
+                const headers = [['NOMOR INDUK', 'NAMA SISWA', 'SAKIT', 'IZIN', 'ALPA']];
+                const rows = siswaKelas.map(s => [s.nisn, s.nama, '', '', '']);
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]);
+                XLSX.utils.book_append_sheet(wb, ws, "Absensi");
+                XLSX.writeFile(wb, `Absensi_${selKelas}.xlsx`);
+            };
+
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const fileData = new Uint8Array(evt.target.result);
+                    const wb = XLSX.read(fileData, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(ws);
+                    let count = 0;
+                    setData(prevData => {
+                        const newAbsensi = [...(prevData.absensi || [])];
+                        json.forEach(row => {
+                            const rawNisn = row['NOMOR INDUK'] || row['Nomor Induk'] || row['NISN'] || row['nisn'];
+                            if (!rawNisn) return;
+                            const nisnStr = String(rawNisn).trim();
+                            const siswa = (prevData.siswa || []).find(s => String(s.nisn).trim() === nisnStr);
+                            if (siswa) {
+                                const parseVal = (val) => val !== undefined && val !== '' ? parseInt(val) : '';
+                                const sakit = parseVal(row['SAKIT'] || row['Sakit']);
+                                const izin = parseVal(row['IZIN'] || row['Izin']);
+                                const alpa = parseVal(row['ALPA'] || row['Alpa']);
+                                
+                                const idx = newAbsensi.findIndex(a => String(a.siswa_id) === String(siswa.id));
+                                if (idx > -1) {
+                                    newAbsensi[idx] = { ...newAbsensi[idx], sakit: isNaN(sakit)?'':sakit, izin: isNaN(izin)?'':izin, alpa: isNaN(alpa)?'':alpa };
+                                } else {
+                                    newAbsensi.push({ siswa_id: siswa.id, sakit: isNaN(sakit)?'':sakit, izin: isNaN(izin)?'':izin, alpa: isNaN(alpa)?'':alpa });
+                                }
+                                count++;
+                            }
+                        });
+                        return { ...prevData, absensi: newAbsensi };
+                    });
+                    setBuffer({});
+                    notify(`Berhasil mengimpor absensi untuk ${count} siswa.`, 'success');
+                };
+                reader.readAsArrayBuffer(file);
+                e.target.value = null;
+            };
+
             const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             return (
                 <div className="space-y-6 animate-fade">
-                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Ketidakhadiran</h2><button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold"><Icon name="save"/> Simpan</button></div>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border shadow-sm gap-4">
+                        <h2 className="text-xl font-bold">Input Ketidakhadiran</h2>
+                        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+                            {selKelas && (
+                                <>
+                                    <button onClick={downloadTemplate} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm">
+                                        <Icon name="download" size={16}/> Format
+                                    </button>
+                                    <button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm">
+                                        <Icon name="upload" size={16}/> Import
+                                    </button>
+                                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
+                                </>
+                            )}
+                            <button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm sm:text-base">
+                                <Icon name="save"/> Simpan
+                            </button>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{availableClasses.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select></div>
                     {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Nama Siswa</th><th className="p-3 w-32 text-center">Sakit (Hari)</th><th className="p-3 w-32 text-center">Izin (Hari)</th><th className="p-3 w-32 text-center">Alpa (Hari)</th></tr></thead><tbody className="divide-y">{students.map(s => { const absen = (data.absensi || []).find(a => String(a.siswa_id) === String(s.id)) || {sakit:'',izin:'',alpa:''}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (absen[f] !== undefined ? absen[f] : ''); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{s.nama}</td>{['sakit','izin','alpa'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-20 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input absensi.</div>}
                 </div>
