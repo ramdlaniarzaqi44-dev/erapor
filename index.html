@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro Al-Multazam Jos Jis</title>
+    <title>e-Rapor Pro v6.18 - SMAS AL-MULTAZAM</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -938,23 +938,37 @@
                     const classStats = targetClasses.map(className => {
                         const studentsInClass = (data.siswa || []).filter(s => s.kelas === className);
                         const total = studentsInClass.length;
-                        let filled = 0;
+                        const isKelas12 = className.toUpperCase().startsWith('XII') || className.startsWith('12');
                         
-                        if (mapelId && total > 0) {
-                            studentsInClass.forEach(s => {
-                                const gradeRecord = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelId));
-                                if (gradeRecord) {
-                                    const hasGrade = ['s1','s2','s3','s4','s5','sts','sas'].some(k => gradeRecord[k] !== undefined && gradeRecord[k] !== '');
-                                    if (hasGrade) filled++;
-                                }
-                            });
-                        }
-                        const percentage = total > 0 ? Math.round((filled / total) * 100) : 0;
-                        return { className, total, filled, percentage };
+                        // Menyesuaikan array bagian nilai berdasarkan tingkatan kelas
+                        const parts = isKelas12 
+                            ? [{key: 's1', label: 'S1'}, {key: 's2', label: 'S2'}, {key: 's3', label: 'S3'}, {key: 's4', label: 'S4'}, {key: 's5', label: 'S5'}, {key: 'sas', label: 'SAS'}, {key: 'psaj_praktik', label: 'PSAJ P.'}, {key: 'psaj_tulis', label: 'PSAJ T.'}]
+                            : [{key: 's1', label: 'S1'}, {key: 's2', label: 'S2'}, {key: 's3', label: 'S3'}, {key: 's4', label: 'S4'}, {key: 's5', label: 'S5'}, {key: 'sts', label: 'STS'}, {key: 'sas', label: 'SAS'}];
+                        
+                        let totalFilledPercentage = 0;
+
+                        const partStats = parts.map(p => {
+                            let filled = 0;
+                            if (mapelId && total > 0) {
+                                studentsInClass.forEach(s => {
+                                    const gradeRecord = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(mapelId));
+                                    if (gradeRecord && gradeRecord[p.key] !== undefined && gradeRecord[p.key] !== '') {
+                                        filled++;
+                                    }
+                                });
+                            }
+                            const percentage = total > 0 ? Math.round((filled / total) * 100) : 0;
+                            totalFilledPercentage += percentage;
+                            return { ...p, filled, percentage };
+                        });
+
+                        const overallPercentage = parts.length > 0 ? Math.round(totalFilledPercentage / parts.length) : 0;
+
+                        return { className, total, partStats, overallPercentage };
                     });
 
-                    const isAllDone = classStats.length > 0 && classStats.every(cs => cs.percentage === 100);
-                    const isAnyStarted = classStats.some(cs => cs.percentage > 0);
+                    const isAllDone = classStats.length > 0 && classStats.every(cs => cs.overallPercentage === 100);
+                    const isAnyStarted = classStats.some(cs => cs.overallPercentage > 0);
                     const overallStatus = isAllDone ? 'SELESAI' : isAnyStarted ? 'PROSES' : 'KOSONG';
 
                     return { ...g, classStats, overallStatus };
@@ -969,7 +983,7 @@
                     <div className="bg-white rounded-xl shadow border overflow-hidden">
                         <div className="p-4 bg-blue-50 border-b flex items-center gap-2 text-blue-800 text-sm">
                             <Icon name="info" size={16}/>
-                            <span>Menampilkan persentase pengisian nilai <b>per kelas</b> berdasarkan mata pelajaran yang diampu oleh masing-masing guru.</span>
+                            <span>Menampilkan detail persentase pengisian nilai <b>per bagian asesmen</b> di setiap kelas yang diampu.</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
@@ -978,7 +992,7 @@
                                         <th className="p-3 w-10 text-center">No</th>
                                         <th className="p-3 w-48">Nama Guru</th>
                                         <th className="p-3 w-40">Mata Pelajaran</th>
-                                        <th className="p-3 min-w-[300px]">Progres Penilaian Per Kelas</th>
+                                        <th className="p-3 min-w-[400px]">Detail Progres Penilaian Per Kelas</th>
                                         <th className="p-3 w-28 text-center">Status Total</th>
                                     </tr>
                                 </thead>
@@ -992,15 +1006,22 @@
                                             </td>
                                             <td className="p-3">
                                                 {g.classStats.length > 0 ? (
-                                                    <div className="space-y-3">
+                                                    <div className="space-y-4">
                                                         {g.classStats.map((cs, i) => (
-                                                            <div key={i} className="flex flex-col">
-                                                                <div className="flex justify-between text-xs mb-1">
-                                                                    <span className="font-bold text-slate-700">Kelas {cs.className}</span>
-                                                                    <span className="text-slate-500">{cs.filled} / {cs.total} Siswa ({cs.percentage}%)</span>
+                                                            <div key={i} className="flex flex-col bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                                                <div className="flex justify-between items-center text-xs mb-3 border-b pb-2">
+                                                                    <span className="font-bold text-slate-800 text-sm">Kelas {cs.className} <span className="text-slate-500 font-normal text-xs">({cs.total} Siswa)</span></span>
+                                                                    <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded">Rata-rata: {cs.overallPercentage}%</span>
                                                                 </div>
-                                                                <div className="w-full bg-slate-200 rounded-full h-2">
-                                                                    <div className={`h-2 rounded-full transition-all duration-500 ${cs.percentage === 100 ? 'bg-emerald-500' : cs.percentage > 0 ? 'bg-blue-500' : 'bg-slate-400'}`} style={{width: `${cs.percentage}%`}}></div>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {cs.partStats.map((ps, j) => (
+                                                                        <div key={j} className="flex flex-col items-center justify-center py-1.5 px-2 bg-slate-50 rounded border border-slate-200 min-w-[45px]">
+                                                                            <span className="text-[10px] font-bold text-slate-500 mb-1">{ps.label}</span>
+                                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${ps.percentage === 100 ? 'bg-emerald-100 text-emerald-700' : ps.percentage > 0 ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-600'}`}>
+                                                                                {ps.percentage}%
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -2249,7 +2270,7 @@
                                             
                                             <div className="mt-4 mb-2 mx-6 border-t border-slate-700"></div>
                                             
-                                            <button onClick={()=>handleMenuClick('cetak')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='cetak' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="printer"/> Cetak Rapor Sisipan</button>
+                                            <button onClick={()=>handleMenuClick('cetak')} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page==='cetak' && 'bg-slate-800 text-white border-r-4 border-secondary'}`}><Icon name="printer"/> Cetak Rapor Diknas</button>
                                             <button onClick={()=>handleMenuClick('cetak_pondok')} className={`w-full px-6 py-3 text-left hover:bg-emerald-800 hover:text-emerald-400 transition flex items-center gap-3 ${page==='cetak_pondok' && 'bg-emerald-900 text-emerald-400 border-r-4 border-emerald-500'}`}><Icon name="book-open"/> Cetak Rapor Pondok</button>
                                         </>
                                     )}
