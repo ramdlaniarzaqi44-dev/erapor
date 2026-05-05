@@ -808,9 +808,11 @@
                     const propsToCopy = ['urutan', 'kelompok', 'parent', 'kkm'];
                     propsToCopy.forEach(prop => {
                         const specificField = `${prop}_per_kelas`;
-                        const sourceVal = newMapel[specificField] && newMapel[specificField][copySourceClass] !== undefined 
+                        let sourceVal = newMapel[specificField] && newMapel[specificField][copySourceClass] !== undefined 
                                             ? newMapel[specificField][copySourceClass] 
                                             : (prop === 'parent' ? (newMapel.parent || '') : newMapel[prop]);
+                        
+                        if (sourceVal === undefined) sourceVal = ''; // Cegah undefined
                         
                         newMapel[specificField] = { ...(newMapel[specificField] || {}), [selectedClass]: sourceVal };
                     });
@@ -824,7 +826,13 @@
                 notify(`Berhasil menyalin & menyimpan mapping dari kelas ${copySourceClass}!`, "success");
             };
 
-            const save = () => { setData(prev => ({ ...prev, mapel: edits })); notify("Mapping berhasil disimpan"); };
+            const save = () => { 
+                // Firebase sangat ketat menolak nilai "undefined" atau "NaN". 
+                // Kita sanitasi object terlebih dahulu agar aman saat masuk server.
+                const sanitizedEdits = JSON.parse(JSON.stringify(edits));
+                setData(prev => ({ ...prev, mapel: sanitizedEdits })); 
+                notify("Mapping berhasil disimpan"); 
+            };
             
             const sortedMapels = [...edits].sort((a,b)=> {
                 const valA = a.urutan_per_kelas && a.urutan_per_kelas[selectedClass] !== undefined ? a.urutan_per_kelas[selectedClass] : a.urutan;
@@ -884,11 +892,11 @@
 
                                                 return (
                                                     <tr key={m.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50 bg-slate-50' : ''}`}>
-                                                        <td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentUrutan} onChange={e=>handlePerKelasChange(m.id, selectedClass, 'urutan', parseInt(e.target.value))}/></td>
+                                                        <td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentUrutan} onChange={e=>{const v = parseInt(e.target.value); handlePerKelasChange(m.id, selectedClass, 'urutan', isNaN(v)?'':v);}}/></td>
                                                         <td className="p-2 font-medium">{m.nama}</td>
                                                         <td className="p-2"><select className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentKelompok} onChange={e=>handlePerKelasChange(m.id, selectedClass, 'kelompok', e.target.value)}><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></td>
                                                         <td className="p-2"><input type="text" className="w-full border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentParent} placeholder="-" onChange={e=>handlePerKelasChange(m.id, selectedClass, 'parent', e.target.value)}/></td>
-                                                        <td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentKkm} onChange={e=>handlePerKelasChange(m.id, selectedClass, 'kkm', parseInt(e.target.value))}/></td>
+                                                        <td className="p-2"><input type="number" className="w-full text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none" value={currentKkm} onChange={e=>{const v = parseInt(e.target.value); handlePerKelasChange(m.id, selectedClass, 'kkm', isNaN(v)?'':v);}}/></td>
                                                         <td className="p-2 text-center bg-yellow-50/30"><label className="flex items-center justify-center cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-emerald-500 cursor-pointer" checked={isActive} onChange={() => handleToggleActive(m.id, selectedClass)}/></label></td>
                                                     </tr>
                                                 ); 
