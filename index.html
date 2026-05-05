@@ -938,7 +938,7 @@
                     const classStats = targetClasses.map(className => {
                         const studentsInClass = (data.siswa || []).filter(s => s.kelas === className);
                         const total = studentsInClass.length;
-                        const isKelas12 = className.toUpperCase().startsWith('XII') || className.startsWith('12');
+                        const isKelas12 = Boolean(className.toUpperCase().startsWith('XII') || className.startsWith('12'));
                         
                         // Menyesuaikan array bagian nilai berdasarkan tingkatan kelas
                         const parts = isKelas12 
@@ -1045,7 +1045,10 @@
         };
 
         const InputNilai = ({ data, setData, notify, user, updateData }) => {
-            const [selKelas, setSelKelas] = useState(''); const [selMapel, setSelMapel] = useState(''); const [buffer, setBuffer] = useState({}); const fileInputRef = useRef(null);
+            const [selKelas, setSelKelas] = useState(''); 
+            const [selMapel, setSelMapel] = useState(''); 
+            const [buffer, setBuffer] = useState({}); 
+            const fileInputRef = useRef(null);
 
             const guruProfiles = useMemo(() => {
                 if (user.role === 'admin') return [];
@@ -1100,8 +1103,8 @@
                 }
 
                 return mapels.sort((a,b) => {
-                    const valA = a.urutan_per_kelas && a.urutan_per_kelas[selKelas] !== undefined ? a.urutan_per_kelas[selKelas] : a.urutan;
-                    const valB = b.urutan_per_kelas && b.urutan_per_kelas[selKelas] !== undefined ? b.urutan_per_kelas[selKelas] : b.urutan;
+                    const valA = a.urutan_per_kelas && a.urutan_per_kelas[selKelas] !== undefined ? a.urutan_per_kelas[selKelas] : (a.urutan || 99);
+                    const valB = b.urutan_per_kelas && b.urutan_per_kelas[selKelas] !== undefined ? b.urutan_per_kelas[selKelas] : (b.urutan || 99);
                     return valA - valB;
                 });
             }, [data.mapel, selKelas, guruProfiles, user.role]);
@@ -1109,7 +1112,7 @@
             useEffect(() => { if (filteredKelas.length === 1 && !selKelas) setSelKelas(filteredKelas[0].nama); if (selKelas && !filteredKelas.find(k => k.nama === selKelas)) setSelKelas(''); }, [filteredKelas, selKelas]);
             useEffect(() => { if (availableMapel.length === 1 && !selMapel) setSelMapel(availableMapel[0].id); if (selMapel && !availableMapel.find(m => String(m.id) === String(selMapel))) setSelMapel(''); }, [availableMapel, selMapel]);
 
-            const isKelas12 = selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12'));
+            const isKelas12 = Boolean(selKelas && (selKelas.toUpperCase().startsWith('XII') || selKelas.startsWith('12')));
 
             const handleSave = () => {
                 if(!selMapel) return notify('Pilih Mapel dulu', 'error');
@@ -1235,9 +1238,100 @@
             const students = useMemo(() => (data.siswa || []).filter(s => s.kelas === selKelas), [data.siswa, selKelas]);
             return (
                 <div className="space-y-6 animate-fade">
-                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Akademik</h2><div className="flex gap-2">{selKelas && selMapel && (<><button onClick={downloadTemplateNilai} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Format</button><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="upload" size={16}/> Import</button><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={importNilai} /></>)}<button onClick={handleSave} className="bg-accent text-white px-4 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm"><Icon name="save" size={16}/> Simpan</button></div></div>
-                    <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5'].map(h=><th key={h} className="p-2 text-center w-16">{h}</th>)}{!isKelas12 && <th className="p-2 text-center w-16">STS</th>}<th className="p-2 text-center w-16">SAS</th><th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined ? nilai[f] : ''); const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts) / 2); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>{['s1','s2','s3','s4','s5'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}{!isKelas12 && <td className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sts')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sts`]: e.target.value}))}/></td>}<td className="p-2 text-center"><input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sas')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sas`]: e.target.value}))}/></td><td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/></td>}{isKelas12 && <td className="p-2 text-center"><input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/></td>}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran</div>}
+                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm">
+                        <h2 className="text-xl font-bold">Input Nilai Akademik</h2>
+                        <div className="flex gap-2">
+                            {selKelas && selMapel && (
+                                <>
+                                    <button onClick={downloadTemplateNilai} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm">
+                                        <Icon name="download" size={16}/> Format
+                                    </button>
+                                    <button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm">
+                                        <Icon name="upload" size={16}/> Import
+                                    </button>
+                                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={importNilai} />
+                                </>
+                            )}
+                            <button onClick={handleSave} className="bg-accent text-white px-4 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm">
+                                <Icon name="save" size={16}/> Simpan
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}>
+                            <option value="">-- Pilih Kelas --</option>
+                            {filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}
+                        </select>
+                        <select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}>
+                            <option value="">-- Pilih Mata Pelajaran --</option>
+                            {availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : (m.urutan || 99)}. {m.nama}</option>)}
+                        </select>
+                    </div>
+                    
+                    {selKelas && selMapel ? (
+                        <div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 border-b">
+                                    <tr>
+                                        <th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>
+                                        {['S1','S2','S3','S4','S5'].map(h => <th key={h} className="p-2 text-center w-16">{h}</th>)}
+                                        {!isKelas12 && <th className="p-2 text-center w-16">STS</th>}
+                                        <th className="p-2 text-center w-16">SAS</th>
+                                        <th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>
+                                        {isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}
+                                        {isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {students.map(s => { 
+                                        const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; 
+                                        const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined ? nilai[f] : ''); 
+                                        const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); 
+                                        const rerata = sumatif.length ? Math.round(sumatif.reduce((a,b)=>a+b,0)/sumatif.length) : 0; 
+                                        const sts = parseInt(getVal('sts')) || 0; 
+                                        const sas = parseInt(getVal('sas')) || 0; 
+                                        const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts) / 2); 
+                                        
+                                        return (
+                                            <tr key={s.id} className="hover:bg-slate-50">
+                                                <td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama}</td>
+                                                {['s1','s2','s3','s4','s5'].map(f => (
+                                                    <td key={f} className="p-2 text-center">
+                                                        <input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/>
+                                                    </td>
+                                                ))}
+                                                {!isKelas12 && (
+                                                    <td className="p-2 text-center">
+                                                        <input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sts')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sts`]: e.target.value}))}/>
+                                                    </td>
+                                                )}
+                                                <td className="p-2 text-center">
+                                                    <input type="number" className="w-14 text-center border rounded p-1 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal('sas')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-sas`]: e.target.value}))}/>
+                                                </td>
+                                                <td className="p-2 text-center font-bold bg-slate-50 border-l border-r text-emerald-600">{akhir}</td>
+                                                {isKelas12 && (
+                                                    <td className="p-2 text-center">
+                                                        <input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_praktik')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_praktik`]: e.target.value}))}/>
+                                                    </td>
+                                                )}
+                                                {isKelas12 && (
+                                                    <td className="p-2 text-center">
+                                                        <input type="number" className="w-16 text-center border rounded p-1 focus:ring-2 focus:ring-purple-500 outline-none transition" value={getVal('psaj_tulis')} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-psaj_tulis`]: e.target.value}))}/>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : ( 
+                        <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">
+                            <Icon name="arrow-up-circle" size={48} className="mb-4 text-slate-300 mx-auto"/>
+                            <p className="text-lg font-medium">Silakan pilih Kelas dan Mata Pelajaran</p>
+                        </div> 
+                    )}
                 </div>
             )
         };
