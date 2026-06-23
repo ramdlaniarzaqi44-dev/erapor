@@ -15,6 +15,18 @@
     <!-- SheetJS for Excel Import/Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <!-- Konfigurasi Paksa Babel JSX Classic Runtime -->
+    <script>
+        // Mencegah Babel menghasilkan "import { jsx }" yang ditolak browser
+        if (typeof Babel !== 'undefined') {
+            Babel.registerPreset('react-classic', {
+                presets: [
+                    [Babel.availablePresets['react'], { "runtime": "classic" }]
+                ]
+            });
+        }
+    </script>
+
     <!-- Custom Config for Tailwind -->
     <script>
         tailwind.config = {
@@ -75,8 +87,8 @@
 <body class="text-slate-800">
     <div id="root"></div>
 
+    <!-- FIREBASE MODULE -->
     <script type="module">
-        // --- FIREBASE SETUP ---
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
         import { getFirestore, doc, onSnapshot, setDoc, collection } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
@@ -90,30 +102,29 @@
             appId: "1:1022149334440:web:2da5a09f4e3fad7d89399d"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const APP_ID_DB = typeof __app_id !== 'undefined' ? __app_id : 'smas-almultazam-db'; 
+        try {
+            const app = initializeApp(firebaseConfig);
+            window.db = getFirestore(app);
+            window.auth = getAuth(app);
+            window.APP_ID_DB = typeof __app_id !== 'undefined' ? __app_id : 'smas-almultazam-db'; 
 
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-        };
-        initAuth();
+            window.doc = doc;
+            window.onSnapshot = onSnapshot;
+            window.setDoc = setDoc;
+            window.collection = collection;
+            window.signInAnonymously = signInAnonymously;
+            window.onAuthStateChanged = onAuthStateChanged;
+            window.signInWithCustomToken = signInWithCustomToken;
 
-        window.db = db;
-        window.auth = auth;
-        window.APP_ID_DB = APP_ID_DB;
-        window.doc = doc;
-        window.onSnapshot = onSnapshot;
-        window.setDoc = setDoc;
-        window.collection = collection;
+            // Penanda Firebase selesai dimuat
+            window.firebaseReady = true;
+        } catch (e) {
+            console.error("Firebase init failed:", e);
+        }
     </script>
 
-    <script type="text/babel">
+    <!-- REACT APP - Menggunakan preset khusus untuk mengatasi Babel > 7.25 -->
+    <script type="text/babel" data-presets="react-classic,env">
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- TRANSLITERASI PEGON & ARABIC TOOLS ---
@@ -284,7 +295,15 @@
             const [authUser, setAuthUser] = useState(null);
 
             useEffect(() => {
-                const unsubscribe = window.auth.onAuthStateChanged(u => setAuthUser(u));
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await window.signInWithCustomToken(window.auth, __initial_auth_token);
+                    } else {
+                        await window.signInAnonymously(window.auth);
+                    }
+                };
+                initAuth();
+                const unsubscribe = window.onAuthStateChanged(window.auth, u => setAuthUser(u));
                 return () => unsubscribe();
             }, []);
 
@@ -1446,7 +1465,7 @@
                                 
                                 const e1 = getEkskulId(row['EKSKUL 1'] || row['Ekskul 1']);
                                 const p1 = row['PREDIKAT 1'] || row['Predikat 1'] || '';
-                                const e2 = getEkskulId(row['EKSKUL 2'] || row['Ekskul 2']);
+                                const e2 = getEkskulId(row['EKSKUL 2'] || row['EKSKUL 2']);
                                 const p2 = row['PREDIKAT 2'] || row['Predikat 2'] || '';
                                 
                                 const filtered = newNilaiEkskul.filter(n => String(n.siswa_id) !== String(siswa.id));
@@ -2418,8 +2437,17 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        const startApp = () => {
+            // Tunggu hingga library React ada dan Firebase siap dari script module
+            if (window.firebaseReady && window.React && window.ReactDOM) {
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(<App />);
+            } else {
+                setTimeout(startApp, 50);
+            }
+        };
+
+        startApp();
     </script>
 </body>
 </html>
