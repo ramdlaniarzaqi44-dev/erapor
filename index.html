@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Rapor Pro v6.19 - SMAS AL-MULTAZAM</title>
+    <title>e-Assesmen Pro v6.19 - SMAS AL-MULTAZAM</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -424,7 +424,7 @@
                                 {isFetching && <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-secondary"></div></div>}
                                 {logo && logo.image ? (<img src={logo.image} alt="Logo" className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />) : (<div className="w-16 h-16 bg-secondary text-white rounded-xl flex items-center justify-center"><Icon name="book-open" size={32}/></div>)}
                             </div>
-                            <h1 className="text-2xl font-bold text-slate-800">e-Rapor Pro</h1><p className="text-slate-500">Sistem Penilaian Akademik</p>
+                            <h1 className="text-2xl font-bold text-slate-800">e-Assesmen Pro</h1><p className="text-slate-500">Sistem Penilaian Akademik</p>
                         </div>
                         {externalError && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 flex items-center gap-2"><Icon name="alert-triangle" size={16}/> {externalError}</div>}
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1318,7 +1318,12 @@
                                         const rerata = sumatif.length ? Math.round(sumatif.reduce((a,b)=>a+b,0)/sumatif.length) : 0; 
                                         const sts = parseInt(getVal('sts')) || 0; 
                                         const sas = parseInt(getVal('sas')) || 0; 
-                                        const akhir = isKelas12 ? Math.round((rerata + sas) / 2) : Math.round((rerata + sts) / 2); 
+                                        
+                                        let komps = [];
+                                        if (rerata > 0) komps.push(rerata);
+                                        if (!isKelas12 && sts > 0) komps.push(sts);
+                                        if (sas > 0) komps.push(sas);
+                                        const akhir = komps.length > 0 ? Math.round(komps.reduce((a,b)=>a+b,0) / komps.length) : 0;
                                         
                                         return (
                                             <tr key={s.id} className="hover:bg-slate-50">
@@ -1732,7 +1737,12 @@
                     
                     const stsVal = parseInt(val.sts) || 0;
                     const sasVal = parseInt(val.sas) || 0;
-                    const akhir = isKelas12 ? Math.round((rerata + sasVal) / 2) : Math.round((rerata + stsVal) / 2);
+                    
+                    let komps = [];
+                    if (rerata > 0) komps.push(rerata);
+                    if (!isKelas12 && stsVal > 0) komps.push(stsVal);
+                    if (sasVal > 0) komps.push(sasVal);
+                    const akhir = komps.length > 0 ? Math.round(komps.reduce((a,b)=>a+b,0) / komps.length) : 0;
                     
                     let predikat = 'D';
                     if (akhir >= 92) predikat = 'A';
@@ -1770,7 +1780,7 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Leger Nilai</h2><button onClick={downloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Download Excel</button></div>
                     <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : m.urutan}. {m.nama}</option>)}</select></div>
-                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th>{!isKelas12 && <th className="p-3 w-16">STS</th>}<th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const stsVal = parseInt(val.sts) || 0; const sasVal = parseInt(val.sas) || 0; const akhir = isKelas12 ? Math.round((rerata + sasVal) / 2) : Math.round((rerata + stsVal) / 2); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td>{!isKelas12 && <td className="p-3">{val.sts||'-'}</td>}<td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
+                    {selKelas && selMapel ? (<div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th>{!isKelas12 && <th className="p-3 w-16">STS</th>}<th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th><th className="p-3 w-16 border-r">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const stsVal = parseInt(val.sts) || 0; const sasVal = parseInt(val.sas) || 0; let komps = []; if (rerata > 0) komps.push(rerata); if (!isKelas12 && stsVal > 0) komps.push(stsVal); if (sasVal > 0) komps.push(sasVal); const akhir = komps.length > 0 ? Math.round(komps.reduce((a,b)=>a+b,0) / komps.length) : 0; let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata}</td>{!isKelas12 && <td className="p-3">{val.sts||'-'}</td>}<td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir}</td><td className="p-3 font-bold border-r">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas dan Mata Pelajaran untuk melihat Leger Nilai.</div>}
                 </div>
             );
         };
@@ -1846,12 +1856,11 @@
                  
                  const realRerata = rerata === '' ? 0 : rerata;
                  
-                 let akhir = 0;
-                 if (isKelas12) {
-                     akhir = sasVal > 0 ? Math.round((realRerata + sasVal) / 2) : realRerata;
-                 } else {
-                     akhir = stsVal > 0 ? Math.round((realRerata + stsVal) / 2) : realRerata;
-                 }
+                 let komps = [];
+                 if (realRerata > 0) komps.push(realRerata);
+                 if (!isKelas12 && stsVal > 0) komps.push(stsVal);
+                 if (sasVal > 0) komps.push(sasVal);
+                 const akhir = komps.length > 0 ? Math.round(komps.reduce((a,b)=>a+b,0) / komps.length) : 0;
                  
                  let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C';
                  return { rerata, akhir, predikat };
