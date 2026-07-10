@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-Assesmen Kurmer Pro v6.5 - SMAS AL-MULTAZAM</title>
+    <title>e-Assesmen Kurmer Pro - SMAS AL-MULTAZAM</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -15,6 +15,7 @@
     <!-- SheetJS for Excel Import/Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <!-- Konfigurasi Paksa Babel JSX Classic Runtime untuk mencegah error import { jsx } -->
     <script>
         if (typeof Babel !== 'undefined') {
             Babel.registerPreset('react-classic', {
@@ -25,14 +26,15 @@
         }
     </script>
 
+    <!-- Custom Config for Tailwind -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        primary: '#0f172a',
-                        secondary: '#3b82f6',
-                        accent: '#10b981',
+                        primary: '#0f172a', // Slate 900
+                        secondary: '#3b82f6', // Blue 500
+                        accent: '#10b981', // Emerald 500
                     }
                 }
             }
@@ -45,12 +47,14 @@
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .font-pegon { font-family: 'Amiri', serif; }
         
+        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
         
         .animate-fade { animation: fadeIn 0.4s ease-out forwards; }
         .animate-slide { animation: slideIn 0.3s ease-out forwards; }
 
+        /* Print Styling */
         @media print {
             @page { size: A4; margin: 1cm; }
             html, body { height: auto; overflow: visible !important; background: white; }
@@ -60,13 +64,16 @@
             .print-only { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
             .page-break { page-break-after: always; break-after: always; display: block; width: 100%; clear: both; }
             
+            /* Table Umum */
             .print-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
             .print-table th, .print-table td { border: 1px solid black !important; padding: 2px 4px; }
             
+            /* Table Khusus Pondok */
             .print-table-pondok { width: 100%; border-collapse: collapse; font-size: 13pt; text-align: center; }
             .print-table-pondok th { border: 1.5px solid black !important; padding: 8px 6px; font-weight: bold; background-color: #f8fafc !important; }
             .print-table-pondok td { border: 1.5px solid black !important; padding: 6px; }
             
+            /* Utility */
             .vertical-text { writing-mode: vertical-rl; text-align: center; }
         }
         .print-only { display: none; }
@@ -79,6 +86,7 @@
 <body class="text-slate-800">
     <div id="root"></div>
 
+    <!-- FIREBASE MODULE -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
         import { getFirestore, doc, onSnapshot, setDoc, collection } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
@@ -113,11 +121,12 @@
         }
     </script>
 
+    <!-- REACT APP SCRIPT -->
     <script type="text/babel" data-presets="react-classic,env">
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- TOOLS ---
-        const stripGelar = (name) => name ? name.split(',')[0].trim() : '';
+        const stripGelar = (name) => name ? String(name).split(',')[0].trim() : '';
         
         const toPegon = (text) => {
             if (!text) return '';
@@ -142,7 +151,7 @@
             return 'Lainnya';
         };
 
-        const toArabicNum = (num) => String(num).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+        const toArabicNum = (num) => String(num || '').replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
 
         const toArabicWord = (num) => {
             const n = parseInt(num);
@@ -166,6 +175,7 @@
         };
 
         const mapelToArabic = (nama) => {
+            if (!nama) return '';
             if (/[\u0600-\u06FF]/.test(nama)) return nama;
             const dict = { 'fiqih': 'فقه', 'akhlak': 'أخلاق', 'aqidah akhlak': 'أخلاق', 'hadits': 'حديث', 'al-qur\'an hadis': 'حديث', 'al qur\'an hadis': 'حديث', 'bahasa arab': 'لغة العربية', 'nahwu': 'نحو', 'sharaf': 'صرف', 'sorf': 'صرف' };
             return dict[String(nama).toLowerCase().trim()] || toPegon(nama);
@@ -307,16 +317,18 @@
             <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-1">{label}</label><input type={type} value={value !== undefined && value !== null ? value : ""} onChange={e=>onChange(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder={placeholder}/></div>
         );
 
-        const ClassSelector = ({ label, availableClasses, selectedClasses = [], onChange }) => {
-            const isAllSelected = availableClasses.length > 0 && selectedClasses.length === availableClasses.map(c=>c.nama).length;
-            const handleToggleAll = () => onChange(isAllSelected ? [] : availableClasses.map(c => c.nama));
-            const handleToggle = (className) => { const current = selectedClasses || []; onChange(current.includes(className) ? current.filter(c => c !== className) : [...current, className]); };
-            return (<div className="mb-4"><div className="flex justify-between items-center mb-2"><label className="block text-sm font-medium text-slate-700">{label}</label><button onClick={handleToggleAll} className="text-xs text-blue-600 hover:text-blue-800 font-medium">{isAllSelected ? "Hapus Semua" : "Pilih Semua"}</button></div><div className="grid grid-cols-3 gap-2 border p-3 rounded-lg bg-slate-50 max-h-32 overflow-y-auto">{availableClasses.map(k => (<label key={k.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded"><input type="checkbox" checked={(selectedClasses || []).includes(k.nama)} onChange={() => handleToggle(k.nama)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"/><span className="text-sm">{k.nama}</span></label>))}</div><div className="text-xs text-slate-500 mt-1">{(selectedClasses || []).length === 0 ? "Belum ada kelas dipilih" : `${(selectedClasses || []).length} kelas dipilih`}</div></div>);
+        const ClassSelector = ({ label, availableClasses = [], selectedClasses = [], onChange }) => {
+            const currentSelected = selectedClasses || [];
+            const safeClasses = availableClasses || [];
+            const isAllSelected = safeClasses.length > 0 && currentSelected.length === safeClasses.length;
+            const handleToggleAll = () => onChange(isAllSelected ? [] : safeClasses.map(c => c.nama));
+            const handleToggle = (className) => { onChange(currentSelected.includes(className) ? currentSelected.filter(c => c !== className) : [...currentSelected, className]); };
+            return (<div className="mb-4"><div className="flex justify-between items-center mb-2"><label className="block text-sm font-medium text-slate-700">{label}</label><button onClick={handleToggleAll} className="text-xs text-blue-600 hover:text-blue-800 font-medium">{isAllSelected ? "Hapus Semua" : "Pilih Semua"}</button></div><div className="grid grid-cols-3 gap-2 border p-3 rounded-lg bg-slate-50 max-h-32 overflow-y-auto">{safeClasses.map(k => (<label key={k.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded"><input type="checkbox" checked={currentSelected.includes(k.nama)} onChange={() => handleToggle(k.nama)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"/><span className="text-sm">{k.nama}</span></label>))}</div><div className="text-xs text-slate-500 mt-1">{currentSelected.length === 0 ? "Belum ada kelas dipilih" : `${currentSelected.length} kelas dipilih`}</div></div>);
         };
 
-        const TugasTambahanSelector = ({ availableClasses, selectedTugas = [], onChange }) => {
+        const TugasTambahanSelector = ({ availableClasses = [], selectedTugas = [], onChange }) => {
             const currentSelected = Array.isArray(selectedTugas) ? selectedTugas : (selectedTugas && selectedTugas !== '-' ? String(selectedTugas).split(',').map(s=>s.trim()) : []);
-            const options = ['Kepala Sekolah', 'Waka Akademik', 'Panitia Sumatif', 'Koordinator Mapel IPA', 'Koordinator Mapel IPS', ...availableClasses.map(k => `Wali Kelas ${k.nama}`)];
+            const options = ['Kepala Sekolah', 'Waka Akademik', 'Panitia Sumatif', 'Koordinator Mapel IPA', 'Koordinator Mapel IPS', ...(availableClasses || []).map(k => `Wali Kelas ${k.nama}`)];
             const handleToggle = (task) => { if (currentSelected.includes(task)) onChange(currentSelected.filter(t => t !== task)); else onChange([...currentSelected, task]); };
             return (
                 <div className="mb-4">
@@ -416,7 +428,7 @@
             const handleCopy = async () => {
                 if(window.confirm(`Yakin ingin membuat semester ${targetSemester} ${targetTahun} berdasarkan data master saat ini?\nData nilai, ekskul, dan absensi akan DIBERSIHKAN di semester baru tersebut.`)) {
                     setIsProcessing(true);
-                    const newData = { ...data, sekolah: { ...data.sekolah, tahunPelajaran: targetTahun, semester: targetSemester }, nilaiMapel: [], nilaiEkskul: [], absensi: [] };
+                    const newData = { ...data, sekolah: { ...(data.sekolah || {}), tahunPelajaran: targetTahun, semester: targetSemester }, nilaiMapel: [], nilaiEkskul: [], absensi: [] };
                     const docId = `content_${targetTahun.replace(/\//g, '-')}_${targetSemester.toLowerCase()}`;
                     const docRef = window.doc(window.db, 'artifacts', window.APP_ID_DB, 'public', 'data', 'main_db', docId);
                     try { await window.setDoc(docRef, newData); notify(`Semester ${targetSemester} ${targetTahun} berhasil dibuat! Silakan logout lalu login ke semester tersebut.`, 'success'); } 
@@ -429,7 +441,7 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Manajemen Semester Akademik</h2></div>
                     <div className="bg-white p-6 rounded-xl border shadow-sm max-w-3xl">
-                        <div className="p-4 bg-blue-50 text-blue-800 rounded-lg mb-6 flex gap-3 text-sm"><Icon name="info" className="shrink-0 mt-0.5" /><p>Fitur ini digunakan untuk mempersiapkan <b>Tahun Ajaran/Semester Baru</b>. Sistem akan menyalin data master otomatis (Siswa, Guru, Mapel, Kelas, Akun) dari semester saat ini (<b>{activeSemester.semester} {activeSemester.tahun}</b>), dan akan <b>mengosongkan seluruh data nilai dan absensi</b> untuk digunakan di semester yang baru.</p></div>
+                        <div className="p-4 bg-blue-50 text-blue-800 rounded-lg mb-6 flex gap-3 text-sm"><Icon name="info" className="shrink-0 mt-0.5" /><p>Fitur ini digunakan untuk mempersiapkan <b>Tahun Ajaran/Semester Baru</b>. Sistem akan menyalin data master otomatis dari semester saat ini (<b>{activeSemester.semester} {activeSemester.tahun}</b>), dan <b>mengosongkan seluruh data nilai dan absensi</b> untuk digunakan di semester yang baru.</p></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <div><label className="block text-sm font-medium mb-1 text-slate-700">Tahun Ajaran Baru</label><input type="text" className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-secondary" value={targetTahun} onChange={e=>setTargetTahun(e.target.value)} placeholder="Contoh: 2026/2027"/></div>
                             <div><label className="block text-sm font-medium mb-1 text-slate-700">Semester Baru</label><select className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-secondary" value={targetSemester} onChange={e=>setTargetSemester(e.target.value)}><option value="Ganjil">Ganjil</option><option value="Genap">Genap</option></select></div>
@@ -439,13 +451,89 @@
                 </div>
             )
         };
+        
+        // --- KOMPONEN BACKUP RESTORE BARU ---
+        const BackupRestore = ({ data, setData, notify }) => {
+            const fileInputRef = useRef(null);
+
+            const handleExport = () => {
+                try {
+                    const dataStr = JSON.stringify(data, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `backup_erapor_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    notify('Backup berhasil diunduh', 'success');
+                } catch (error) {
+                    notify('Gagal membuat file backup', 'error');
+                }
+            };
+
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        if (window.confirm('PERINGATAN: Data saat ini akan DITIMPA sepenuhnya oleh data dari file backup. Yakin ingin melanjutkan?')) {
+                            setData(importedData);
+                            notify('Restore data berhasil!', 'success');
+                        }
+                    } catch (error) {
+                        notify('File tidak valid atau rusak', 'error');
+                    }
+                    e.target.value = null; // reset input
+                };
+                reader.readAsText(file);
+            };
+
+            return (
+                <div className="space-y-6 animate-fade">
+                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm">
+                        <h2 className="text-xl font-bold">Backup & Restore Data</h2>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl border shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="border rounded-xl p-6 flex flex-col items-center text-center space-y-4 bg-blue-50/50">
+                            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                                <Icon name="download" size={32} />
+                            </div>
+                            <h3 className="font-bold text-lg">Backup Data</h3>
+                            <p className="text-sm text-slate-600 flex-1">Unduh seluruh data pada semester aktif ini ke dalam format JSON. Simpan file ini di tempat yang aman sebagai cadangan.</p>
+                            <button onClick={handleExport} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 transition w-full shadow-md flex items-center justify-center gap-2">
+                                <Icon name="download" size={18}/> Download Backup
+                            </button>
+                        </div>
+                        
+                        <div className="border rounded-xl p-6 flex flex-col items-center text-center space-y-4 bg-emerald-50/50">
+                            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                                <Icon name="upload" size={32} />
+                            </div>
+                            <h3 className="font-bold text-lg">Restore Data</h3>
+                            <p className="text-sm text-slate-600 flex-1">Pulihkan data dari file backup JSON yang pernah diunduh. <b>Peringatan:</b> Tindakan ini akan menimpa seluruh data pada semester ini.</p>
+                            <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImport} />
+                            <button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-700 transition w-full shadow-md flex items-center justify-center gap-2">
+                                <Icon name="upload" size={18}/> Upload Restore
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         const DataAkun = ({ data, setData, notify }) => { 
             const guruUsers = (data.users || []).filter(u => u.role === 'guru');
             const generateAccounts = () => {
                 const newUsers = [...(data.users || [])]; let count = 0;
                 (data.guru || []).forEach(g => {
-                    const cleanUsername = g.nama.split(',')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    if(!g.nama) return;
+                    const cleanUsername = String(g.nama).split(',')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                     if (!newUsers.some(u => u.username === cleanUsername)) { newUsers.push({ id: `usr-g-${g.id}`, username: cleanUsername, password: '123', role: 'guru', nama: g.nama, nip: g.nip }); count++; }
                 });
                 if (count > 0) { setData(prev => ({ ...prev, users: newUsers })); notify(`${count} akun guru berhasil dibuat!`, 'success'); } else { notify('Semua guru sudah memiliki akun.', 'success'); }
@@ -509,7 +597,7 @@
             const fileInputRef = useRef(null);
 
             useEffect(() => {
-                setKepsek(data.sekolah?.kepalaSekolahPegon || '');
+                setKepsek((data.sekolah && data.sekolah.kepalaSekolahPegon) ? data.sekolah.kepalaSekolahPegon : '');
                 const kBuf = {};
                 (data.kelas || []).forEach(k => {
                     kBuf[k.id] = {
@@ -529,12 +617,12 @@
             const handleSave = () => {
                 setData(prev => {
                     const next = { ...prev };
-                    next.sekolah = { ...next.sekolah, kepalaSekolahPegon: kepsek };
+                    next.sekolah = { ...(next.sekolah || {}), kepalaSekolahPegon: kepsek };
                     next.kelas = (next.kelas || []).map(k => ({
                         ...k,
                         nama_pegon: kelasBuffer[k.id]?.nama_pegon !== undefined ? kelasBuffer[k.id].nama_pegon : k.nama_pegon
                     }));
-                    next.logo = { ...next.logo };
+                    next.logo = { ...(next.logo || {}) };
                     next.logo.wali_kelas_pegon_per_kelas = { ...(next.logo.wali_kelas_pegon_per_kelas || {}) };
                     (next.kelas || []).forEach(k => {
                         if (kelasBuffer[k.id]?.wali_kelas_pegon !== undefined) {
@@ -851,7 +939,7 @@
         const TableView = ({ title, heads, data, renderRow, onAdd, onEdit, onDelete, searchKeys=[], filterOptions=[], filterKey='', onImport, onDownloadTemplate }) => {
             const [query, setQuery] = useState(''); const [filterVal, setFilterVal] = useState(''); const fileInputRef = useRef(null);
             const safeData = data || [];
-            const filteredData = safeData.filter(item => { const matchesSearch = !query || searchKeys.some(key => String(item[key]).toLowerCase().includes(query.toLowerCase())); let matchesFilter = true; if (filterVal && filterKey) { const itemVal = item[filterKey]; matchesFilter = Array.isArray(itemVal) ? itemVal.includes(filterVal) : String(itemVal) === String(filterVal); } return matchesSearch && matchesFilter; });
+            const filteredData = safeData.filter(item => { const matchesSearch = !query || searchKeys.some(key => String(item[key] || '').toLowerCase().includes(query.toLowerCase())); let matchesFilter = true; if (filterVal && filterKey) { const itemVal = item[filterKey]; matchesFilter = Array.isArray(itemVal) ? itemVal.includes(filterVal) : String(itemVal) === String(filterVal); } return matchesSearch && matchesFilter; });
             return (
                 <div className="space-y-4 animate-fade">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="text-2xl font-bold text-slate-800">{title}</h2><div className="flex gap-2 w-full md:w-auto flex-wrap justify-end">{filterOptions.length > 0 && (<select className="border p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-secondary outline-none" value={filterVal} onChange={e=>setFilterVal(e.target.value)}><option value="">Semua {filterKey === 'kelas' ? 'Kelas' : 'Filter'}</option>{filterOptions.map(opt => <option key={opt.id} value={opt.nama}>{opt.nama}</option>)}</select>)}{searchKeys.length > 0 && (<div className="relative flex-1 md:w-64 min-w-[200px]"><span className="absolute left-3 top-2.5 text-slate-400"><Icon name="search" size={16}/></span><input type="text" placeholder="Cari data..." className="pl-9 pr-4 py-2 border rounded-lg w-full focus:ring-2 focus:ring-secondary outline-none text-sm" value={query} onChange={e=>setQuery(e.target.value)} /></div>)}{onImport && (<><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={onImport} /><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 text-sm shadow hover:bg-emerald-700 transition items-center font-medium"><Icon name="upload" size={16}/> Import</button></>)}{onDownloadTemplate && (<button onClick={onDownloadTemplate} className="bg-slate-600 text-white px-4 py-2 rounded-lg flex gap-2 text-sm shadow hover:bg-slate-700 transition items-center font-medium"><Icon name="download" size={16}/> Format</button>)}{onAdd && <button onClick={onAdd} className="bg-secondary text-white px-4 py-2 rounded-lg flex gap-2 text-sm shadow hover:bg-blue-600 transition items-center font-medium"><Icon name="plus" size={16}/> Tambah</button>}</div></div>
@@ -1018,7 +1106,7 @@
                 if (user?.role !== 'admin') {
                     if (!selKelas) return []; const relevantProfiles = guruProfiles.filter(g => (g.kelasMengajar || []).includes(selKelas));
                     const myMapels = relevantProfiles.map(g => String(g.mapel || '').trim().toLowerCase());
-                    mapels = mapels.filter(m => myMapels.includes(String(m.nama).trim().toLowerCase()));
+                    mapels = mapels.filter(m => myMapels.includes(String(m.nama || '').trim().toLowerCase()));
                 }
                 return mapels.sort((a,b) => {
                     const valA = a.urutan_per_kelas && a.urutan_per_kelas[selKelas] !== undefined ? a.urutan_per_kelas[selKelas] : (a.urutan || 99);
@@ -1112,11 +1200,11 @@
             return (
                 <div className="space-y-6 animate-fade">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Input Nilai Akademik</h2><div className="flex gap-2">{selKelas && selMapel && (<><button onClick={downloadTemplateNilai} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Format</button><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="upload" size={16}/> Import</button><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={importNilai} /></>)}<button onClick={handleSave} className="bg-accent text-white px-4 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm"><Icon name="save" size={16}/> Simpan</button></div></div>
-                    <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : (m.urutan || 99)}. {m.nama}</option>)}</select></div>
+                    <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select><select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : (m.urutan || 99)}. {m.nama || 'Tanpa Nama'}</option>)}</select></div>
                     {selKelas && selMapel ? (
                         <div className="bg-white rounded-xl shadow border overflow-hidden overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{['S1','S2','S3','S4','S5'].map(h => <th key={h} className="p-2 text-center w-16">{h}</th>)}{!isKelas12 && <th className="p-2 text-center w-16">STS</th>}<th className="p-2 text-center w-16">SAS</th><th className="p-2 text-center w-16 bg-slate-100 border-l border-r">Akhir</th>{isKoordIPA && <th className="p-2 text-center w-20 bg-green-50 text-green-700 border-l border-r">IPA</th>}{isKoordIPS && <th className="p-2 text-center w-20 bg-orange-50 text-orange-700 border-l border-r">IPS</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Praktik</th>}{isKelas12 && <th className="p-2 text-center w-20 bg-purple-50">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y">{students.map(s => { 
                             const nilai = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; 
-                            const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined ? nilai[f] : ''); 
+                            const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (nilai[f] !== undefined && nilai[f] !== null ? nilai[f] : ''); 
                             const sumatif = ['s1','s2','s3','s4','s5'].map(k=>parseInt(getVal(k))||0).filter(v=>v>0); const rerata = sumatif.length ? Math.round(sumatif.reduce((a,b)=>a+b,0)/sumatif.length) : 0; 
                             const sts = parseInt(getVal('sts')) || 0; const sas = parseInt(getVal('sas')) || 0; 
                             let komps = []; if (rerata > 0) komps.push(rerata); if (!isKelas12 && sts > 0) komps.push(sts); if (sas > 0) komps.push(sas);
@@ -1160,7 +1248,7 @@
                 if (user?.role !== 'admin' && tab === 'mapel') {
                     if (!selKelas) return []; const relevantProfiles = guruProfiles.filter(g => (g.kelasMengajar || []).includes(selKelas));
                     const myMapels = relevantProfiles.map(g => String(g.mapel || '').trim().toLowerCase());
-                    mapels = mapels.filter(m => myMapels.includes(String(m.nama).trim().toLowerCase()));
+                    mapels = mapels.filter(m => myMapels.includes(String(m.nama || '').trim().toLowerCase()));
                 }
                 return mapels.sort((a,b) => {
                     const valA = a.urutan_per_kelas && a.urutan_per_kelas[selKelas] !== undefined ? a.urutan_per_kelas[selKelas] : (a.urutan || 99);
@@ -1186,7 +1274,7 @@
                 return komps.length > 0 ? Math.round(komps.reduce((a,b)=>a+b,0) / komps.length) : 0;
             };
 
-            const getAkhirForMapelLeger = (siswaId, mapelNamePattern) => { const mapelObj = (data.mapel || []).find(m => String(m.nama).toLowerCase().includes(String(mapelNamePattern).toLowerCase())); if (!mapelObj) return 0; return getAkhir(siswaId, mapelObj.id); };
+            const getAkhirForMapelLeger = (siswaId, mapelNamePattern) => { const mapelObj = (data.mapel || []).find(m => String(m.nama || '').toLowerCase().includes(String(mapelNamePattern).toLowerCase())); if (!mapelObj) return 0; return getAkhir(siswaId, mapelObj.id); };
             const getRataRataGabunganLeger = (siswaId, mapelArray) => { const scores = mapelArray.map(m => getAkhirForMapelLeger(siswaId, m)).filter(score => score > 0); if (scores.length === 0) return 0; return Math.round(scores.reduce((a,b) => a+b, 0) / scores.length); };
 
             const downloadExcel = () => { 
@@ -1223,7 +1311,7 @@
                     if (students.length === 0) return notify('Tidak ada siswa di kelas ini', 'error');
                     const mapels = tab === 'pondok' ? availableMapel.filter(m => m.kelompok === 'C') : availableMapel;
                     if (mapels.length === 0) return notify('Tidak ada mapel untuk kategori ini', 'error');
-                    const headers = ['NO', 'NISN', 'NAMA', 'L/P', ...mapels.map(m => m.nama), 'TOTAL', 'RATA-RATA'];
+                    const headers = ['NO', 'NISN', 'NAMA', 'L/P', ...mapels.map(m => m.nama || 'Mapel'), 'TOTAL', 'RATA-RATA'];
                     const rows = students.map((s, idx) => {
                         let total = 0; let count = 0;
                         const scores = mapels.map(m => { const score = getAkhir(s.id, m.id); if (score > 0) { total += score; count++; } return score || '-'; });
@@ -1239,13 +1327,13 @@
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border shadow-sm"><h2 className="text-xl font-bold">Cetak Leger Nilai</h2><button onClick={downloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Download Excel</button></div>
                     <div className="flex border-b border-slate-200 mb-4"><button onClick={() => setTab('mapel')} className={`px-6 py-3 font-medium text-sm transition ${tab === 'mapel' ? 'text-secondary border-b-2 border-secondary bg-slate-50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Leger Per Mapel</button><button onClick={() => setTab('pondok')} className={`px-6 py-3 font-medium text-sm transition ${tab === 'pondok' ? 'text-secondary border-b-2 border-secondary bg-slate-50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Leger Mapel Pondok</button><button onClick={() => setTab('semua')} className={`px-6 py-3 font-medium text-sm transition ${tab === 'semua' ? 'text-secondary border-b-2 border-secondary bg-slate-50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Leger Semua Mapel</button></div>
                     <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
-                        <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select>{tab === 'mapel' && (<select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : (m.urutan || 99)}. {m.nama}</option>)}</select>)}</div>
+                        <div className="grid grid-cols-2 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{filteredKelas.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select>{tab === 'mapel' && (<select className="p-3 border rounded-lg bg-white shadow-sm" value={selMapel} onChange={e=>setSelMapel(e.target.value)} disabled={!selKelas}><option value="">-- Pilih Mata Pelajaran --</option>{availableMapel.map(m=><option key={m.id} value={m.id}>{m.urutan_per_kelas && m.urutan_per_kelas[selKelas] !== undefined ? m.urutan_per_kelas[selKelas] : (m.urutan || 99)}. {m.nama || 'Tanpa Nama'}</option>)}</select>)}</div>
                         {tab === 'mapel' && selKelas && selMapel && (
                             <div className="border overflow-hidden overflow-x-auto rounded-lg"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b text-center"><tr><th className="p-3 w-10">No</th><th className="p-3 text-left">Nama Siswa</th><th className="p-3 w-12">S1</th><th className="p-3 w-12">S2</th><th className="p-3 w-12">S3</th><th className="p-3 w-12">S4</th><th className="p-3 w-12">S5</th><th className="p-3 w-16 bg-blue-50 border-l border-r">Rerata</th>{!isKelas12 && <th className="p-3 w-16">STS</th>}<th className="p-3 w-16">SAS</th><th className="p-3 w-16 bg-emerald-50 border-l">Akhir</th>{isKoordIPA && <th className="p-3 w-16 bg-green-50 text-green-700">IPA</th>}{isKoordIPS && <th className="p-3 w-16 bg-orange-50 text-orange-700">IPS</th>}<th className="p-3 w-16 border-r border-l">Pred</th>{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Praktik</th>}{isKelas12 && <th className="p-3 w-16 bg-purple-50 border-r">PSAJ Tulis</th>}</tr></thead><tbody className="divide-y text-center">{students.map((s, i) => { const val = (data.nilaiMapel || []).find(n => String(n.siswa_id) === String(s.id) && String(n.mapel_id) === String(selMapel)) || {}; const sum = [val.s1,val.s2,val.s3,val.s4,val.s5].map(v=>parseInt(v)||0).filter(v=>v>0); const rerata = sum.length ? Math.round(sum.reduce((a,b)=>a+b,0)/sum.length) : 0; const akhir = getAkhir(s.id, selMapel); let predikat = 'D'; if(akhir >= 92) predikat = 'A'; else if(akhir >= 83) predikat = 'B'; else if(akhir >= 75) predikat = 'C'; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-slate-500">{i+1}</td><td className="p-3 text-left font-medium">{s.nama || '-'}</td><td className="p-3">{val.s1||'-'}</td><td className="p-3">{val.s2||'-'}</td><td className="p-3">{val.s3||'-'}</td><td className="p-3">{val.s4||'-'}</td><td className="p-3">{val.s5||'-'}</td><td className="p-3 font-bold bg-blue-50 border-l border-r text-blue-700">{rerata || '-'}</td>{!isKelas12 && <td className="p-3">{val.sts||'-'}</td>}<td className="p-3">{val.sas||'-'}</td><td className="p-3 font-bold bg-emerald-50 text-emerald-700 border-l">{akhir || '-'}</td>{isKoordIPA && <td className="p-3 font-bold bg-green-50 text-green-700">{getRataRataGabunganLeger(s.id, ['biologi', 'fisika', 'kimia']) || '-'}</td>}{isKoordIPS && <td className="p-3 font-bold bg-orange-50 text-orange-700">{getRataRataGabunganLeger(s.id, ['sejarah', 'ekonomi', 'sosiologi', 'geografi']) || '-'}</td>}<td className="p-3 font-bold border-r border-l">{predikat}</td>{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_praktik||'-'}</td>}{isKelas12 && <td className="p-3 font-medium text-purple-700 bg-purple-50/30 border-r">{val.psaj_tulis||'-'}</td>}</tr>); })}</tbody></table></div>
                         )}
 
                         {tab !== 'mapel' && selKelas && (
-                            <div className="border overflow-hidden overflow-x-auto rounded-lg"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 text-center w-10 border-r border-b-0">No</th><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r border-b-0 z-10">Nama Siswa</th>{(() => { const mapels = tab === 'pondok' ? availableMapel.filter(m => m.kelompok === 'C') : availableMapel; return mapels.map(m => <th key={m.id} className="p-2 text-center text-xs whitespace-nowrap min-w-[80px] bg-slate-100">{m.nama}</th>); })()}<th className="p-3 text-center w-20 bg-blue-50 border-l">Total</th><th className="p-3 text-center w-20 bg-emerald-50 border-l">Rerata</th></tr></thead><tbody className="divide-y">{students.map((s, idx) => { const mapels = tab === 'pondok' ? availableMapel.filter(m => m.kelompok === 'C') : availableMapel; let total = 0; let count = 0; const scores = mapels.map(m => { const score = getAkhir(s.id, m.id); if (score > 0) { total += score; count++; } return score; }); const rerata = count > 0 ? Math.round(total / count) : 0; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-center text-slate-500 border-r">{idx+1}</td><td className="p-3 font-medium sticky left-0 bg-white border-r z-10">{s.nama || '-'}</td>{scores.map((score, i) => <td key={i} className="p-2 text-center text-slate-600">{score || '-'}</td>)}<td className="p-3 text-center font-bold bg-blue-50/50 border-l text-blue-700">{total || 0}</td><td className="p-3 text-center font-bold bg-emerald-50/50 border-l text-emerald-700">{rerata || 0}</td></tr>); })}{students.length === 0 && <tr><td colSpan="100" className="p-8 text-center text-slate-400">Tidak ada data.</td></tr>}</tbody></table></div>
+                            <div className="border overflow-hidden overflow-x-auto rounded-lg"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 text-center w-10 border-r border-b-0">No</th><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r border-b-0 z-10">Nama Siswa</th>{(() => { const mapels = tab === 'pondok' ? availableMapel.filter(m => m.kelompok === 'C') : availableMapel; return mapels.map(m => <th key={m.id} className="p-2 text-center text-xs whitespace-nowrap min-w-[80px] bg-slate-100">{m.nama || 'Mapel'}</th>); })()}<th className="p-3 text-center w-20 bg-blue-50 border-l">Total</th><th className="p-3 text-center w-20 bg-emerald-50 border-l">Rerata</th></tr></thead><tbody className="divide-y">{students.map((s, idx) => { const mapels = tab === 'pondok' ? availableMapel.filter(m => m.kelompok === 'C') : availableMapel; let total = 0; let count = 0; const scores = mapels.map(m => { const score = getAkhir(s.id, m.id); if (score > 0) { total += score; count++; } return score; }); const rerata = count > 0 ? Math.round(total / count) : 0; return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-center text-slate-500 border-r">{idx+1}</td><td className="p-3 font-medium sticky left-0 bg-white border-r z-10">{s.nama || '-'}</td>{scores.map((score, i) => <td key={i} className="p-2 text-center text-slate-600">{score || '-'}</td>)}<td className="p-3 text-center font-bold bg-blue-50/50 border-l text-blue-700">{total || 0}</td><td className="p-3 text-center font-bold bg-emerald-50/50 border-l text-emerald-700">{rerata || 0}</td></tr>); })}{students.length === 0 && <tr><td colSpan="100" className="p-8 text-center text-slate-400">Tidak ada data.</td></tr>}</tbody></table></div>
                         )}
                     </div>
                 </div>
@@ -1291,7 +1379,7 @@
             const downloadExcel = () => {
                 let headers = []; let rows = []; let filename = "";
                 if (tab === 'kelas') {
-                    if (!selKelas) return notify('Pilih kelas dulu', 'error'); headers = ['RANK', 'NISN', 'NAMA', 'L/P', ...rankKelasMapels.map(m => m.nama), 'TOTAL']; rows = rankKelasData.map(s => [s.rank, s.nisn || '-', s.nama || '-', s.jenis_kelamin || '-', ...rankKelasMapels.map(m => s.scores[m.id] || 0), s.total]); filename = `Peringkat_Kelas_${selKelas}.xlsx`;
+                    if (!selKelas) return notify('Pilih kelas dulu', 'error'); headers = ['RANK', 'NISN', 'NAMA', 'L/P', ...rankKelasMapels.map(m => m.nama || 'Mapel'), 'TOTAL']; rows = rankKelasData.map(s => [s.rank, s.nisn || '-', s.nama || '-', s.jenis_kelamin || '-', ...rankKelasMapels.map(m => s.scores[m.id] || 0), s.total]); filename = `Peringkat_Kelas_${selKelas}.xlsx`;
                 } else {
                     if (!selTingkat) return notify('Pilih jenjang paralel dulu', 'error'); headers = ['RANK', 'NISN', 'NAMA', 'KELAS', 'L/P', 'TOTAL NILAI']; rows = rankParalelData.map(s => [s.rank, s.nisn || '-', s.nama || '-', s.kelas || '-', s.jenis_kelamin || '-', s.total]); filename = `Peringkat_Paralel_Jenjang_${selTingkat}.xlsx`;
                 }
@@ -1306,7 +1394,7 @@
                         {tab === 'kelas' && (
                             <div className="space-y-4">
                                 <div className="max-w-xs"><label className="block text-sm font-medium text-slate-700 mb-1">Pilih Kelas</label><select className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-secondary" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih --</option>{availableClasses.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select></div>
-                                {selKelas && (<div className="border rounded-lg overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 text-center w-12 bg-amber-50">Rank</th><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{rankKelasMapels.map(m => <th key={m.id} className="p-2 text-center text-xs whitespace-nowrap min-w-[80px] bg-slate-100">{m.nama}</th>)}<th className="p-3 text-center w-20 bg-emerald-50 border-l">Total</th></tr></thead><tbody className="divide-y">{rankKelasData.map(s => (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-center font-bold bg-amber-50/50 text-amber-700">{s.rank}</td><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama || '-'}</td>{rankKelasMapels.map(m => <td key={m.id} className="p-2 text-center text-slate-600">{s.scores[m.id] || 0}</td>)}<td className="p-3 text-center font-bold bg-emerald-50/50 border-l text-emerald-700">{s.total || 0}</td></tr>))}{rankKelasData.length === 0 && <tr><td colSpan={rankKelasMapels.length + 3} className="p-8 text-center text-slate-400">Tidak ada data siswa.</td></tr>}</tbody></table></div>)}
+                                {selKelas && (<div className="border rounded-lg overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3 text-center w-12 bg-amber-50">Rank</th><th className="p-3 min-w-[200px] sticky left-0 bg-slate-50 border-r">Nama Siswa</th>{rankKelasMapels.map(m => <th key={m.id} className="p-2 text-center text-xs whitespace-nowrap min-w-[80px] bg-slate-100">{m.nama || 'Mapel'}</th>)}<th className="p-3 text-center w-20 bg-emerald-50 border-l">Total</th></tr></thead><tbody className="divide-y">{rankKelasData.map(s => (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 text-center font-bold bg-amber-50/50 text-amber-700">{s.rank}</td><td className="p-3 font-medium sticky left-0 bg-white border-r">{s.nama || '-'}</td>{rankKelasMapels.map(m => <td key={m.id} className="p-2 text-center text-slate-600">{s.scores[m.id] || 0}</td>)}<td className="p-3 text-center font-bold bg-emerald-50/50 border-l text-emerald-700">{s.total || 0}</td></tr>))}{rankKelasData.length === 0 && <tr><td colSpan={rankKelasMapels.length + 3} className="p-8 text-center text-slate-400">Tidak ada data siswa.</td></tr>}</tbody></table></div>)}
                             </div>
                         )}
                         {tab === 'paralel' && (
@@ -1435,7 +1523,7 @@
                 <div className="space-y-6 animate-fade">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border shadow-sm gap-4"><h2 className="text-xl font-bold">Input Ketidakhadiran</h2><div className="flex gap-2 w-full sm:w-auto flex-wrap">{selKelas && (<><button onClick={downloadTemplate} className="bg-slate-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-slate-700 transition items-center font-medium text-sm"><Icon name="download" size={16}/> Format</button><button onClick={() => fileInputRef.current.click()} className="bg-emerald-600 text-white px-3 py-2 rounded-lg flex gap-2 shadow hover:bg-emerald-700 transition items-center font-medium text-sm"><Icon name="upload" size={16}/> Import</button><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={handleImport} /></>)}<button onClick={handleSave} className="bg-accent text-white px-6 py-2 rounded-lg flex gap-2 hover:bg-emerald-600 shadow transition font-bold text-sm sm:text-base"><Icon name="save"/> Simpan</button></div></div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><select className="p-3 border rounded-lg bg-white shadow-sm" value={selKelas} onChange={e=>setSelKelas(e.target.value)}><option value="">-- Pilih Kelas --</option>{availableClasses.map(k=><option key={k.id} value={k.nama}>{k.nama}</option>)}</select></div>
-                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Nama Siswa</th><th className="p-3 w-32 text-center">Sakit (Hari)</th><th className="p-3 w-32 text-center">Izin (Hari)</th><th className="p-3 w-32 text-center">Alpa (Hari)</th></tr></thead><tbody className="divide-y">{students.map(s => { const absen = (data.absensi || []).find(a => String(a.siswa_id) === String(s.id)) || {sakit:'',izin:'',alpa:''}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (absen[f] !== undefined ? absen[f] : ''); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{s.nama || '-'}</td>{['sakit','izin','alpa'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-20 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input absensi.</div>}
+                    {selKelas ? (<div className="bg-white rounded-xl shadow border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Nama Siswa</th><th className="p-3 w-32 text-center">Sakit (Hari)</th><th className="p-3 w-32 text-center">Izin (Hari)</th><th className="p-3 w-32 text-center">Alpa (Hari)</th></tr></thead><tbody className="divide-y">{students.map(s => { const absen = (data.absensi || []).find(a => String(a.siswa_id) === String(s.id)) || {sakit:'',izin:'',alpa:''}; const getVal = (f) => buffer[`${s.id}-${f}`] !== undefined ? buffer[`${s.id}-${f}`] : (absen[f] !== undefined && absen[f] !== null ? absen[f] : ''); return (<tr key={s.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{s.nama || '-'}</td>{['sakit','izin','alpa'].map(f => (<td key={f} className="p-2 text-center"><input type="number" className="w-20 text-center border rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none transition" value={getVal(f)} onChange={e=>setBuffer(prev => ({...prev, [`${s.id}-${f}`]: e.target.value}))}/></td>))}</tr>)})}</tbody></table></div>) : <div className="text-center p-12 bg-white rounded-xl border border-dashed text-slate-400">Silakan pilih Kelas untuk memulai input absensi.</div>}
                 </div>
             )
         };
@@ -1643,8 +1731,8 @@
             };
             const deleteItem = (key, id) => { if(window.confirm('Hapus data ini?')) { updateData(prev => { const newState = { ...prev }; if(key === 'ekskulRef') newState.ekskulRef = (prev.ekskulRef||[]).filter(i => String(i.id) !== String(id)); else newState[key] = (prev[key]||[]).filter(i => String(i.id) !== String(id)); return newState; }); notify('Data berhasil dihapus'); } };
 
-            const MenuBtn = ({ id, icon, label, specialClass="border-secondary text-white" }) => (
-                <button onClick={()=>handleMenuClick(id)} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page===id ? `bg-slate-800 border-r-4 ${specialClass}` : 'text-slate-400'}`}><Icon name={icon}/> {label}</button>
+            const renderMenuBtn = (id, icon, label, specialClass="border-secondary text-white") => (
+                <button key={id} onClick={()=>handleMenuClick(id)} className={`w-full px-6 py-3 text-left hover:bg-slate-800 hover:text-white transition flex items-center gap-3 ${page===id ? `bg-slate-800 border-r-4 ${specialClass}` : 'text-slate-400'}`}><Icon name={icon}/> {label}</button>
             );
 
             const renderContent = () => {
@@ -1662,7 +1750,7 @@
                     case 'kelas': return <TableView title="Data Kelas" heads={['Nama','Tingkat','Jurusan']} data={data.kelas} searchKeys={['nama']} renderRow={i=><><td className="p-4 font-bold">{i.nama || '-'}</td><td className="p-4">{i.tingkat || '-'}</td><td className="p-4">{i.jurusan || '-'}</td></>} onAdd={()=>openModal('kelas')} onEdit={d=>openModal('kelas',d)} onDelete={id=>deleteItem('kelas', id)} />;
                     case 'referensi_ekskul': return <TableView title="Data Ekstrakurikuler" heads={['Nama Kegiatan']} data={data.ekskulRef} searchKeys={['nama']} renderRow={i=><td className="p-4 font-medium">{i.nama || '-'}</td>} onAdd={()=>openModal('ekskul')} onEdit={d=>openModal('ekskul',d)} onDelete={id=>deleteItem('ekskulRef', id)} />;
                     case 'mapping': return <MappingRapor dataMapel={data.mapel} classList={data.kelas} setData={updateData} notify={notify} />;
-                    case 'input_nilai': return user.role !== 'siswa' ? <InputNilai data={data} setData={updateData} updateData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center">Akses Ditolak</div>;
+                    case 'input_nilai': return user.role !== 'siswa' ? <InputNilai data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center">Akses Ditolak</div>;
                     case 'input_absensi': return (user.role === 'admin' || isWalas) ? <InputAbsensi data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'input_ekskul': return (user.role === 'admin' || isWalas) ? <InputEkskul data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
                     case 'cetak_leger': return <CetakLeger data={data} notify={notify} user={user} />;
@@ -1705,38 +1793,38 @@
                         <div className="h-16 flex items-center px-6 font-bold text-xl tracking-tight text-white border-b border-slate-700">{(data.logo||{}).image ? (<img src={(data.logo||{}).image} className="h-8 w-auto mr-2 object-contain" alt="Logo" onError={(e) => e.target.style.display = 'none'} />) : (<span className="text-secondary mr-1">e</span>)} Rapor<span className="font-light opacity-50 ml-1">Pro</span></div>
                         <div className="flex-1 overflow-y-auto py-6 space-y-1">
                             <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Main</div>
-                            <MenuBtn id="dashboard" icon="grid" label="Dashboard" />
+                            {renderMenuBtn("dashboard", "grid", "Dashboard")}
                             {user?.role === 'admin' && (
                                 <>
                                     <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Master Data</div>
-                                    <MenuBtn id="data_sekolah" icon="school" label="Sekolah" />
-                                    <MenuBtn id="data_akun" icon="key" label="Data Akun" />
-                                    <MenuBtn id="siswa" icon="users" label="Data Siswa" />
-                                    <MenuBtn id="guru" icon="briefcase" label="Data Guru" />
-                                    <MenuBtn id="kelas" icon="layers" label="Data Kelas" />
-                                    <MenuBtn id="mapel" icon="book" label="Data Mapel" />
-                                    <MenuBtn id="referensi_ekskul" icon="activity" label="Data Ekskul" />
-                                    <MenuBtn id="mapping" icon="sliders" label="Mapping Rapor" />
-                                    <MenuBtn id="data_logo" icon="pen-tool" label="Logo & TTD" />
-                                    <MenuBtn id="data_pegon" icon="type" label="Data Pegon Pondok" />
-                                    
+                                    {renderMenuBtn("data_sekolah", "school", "Sekolah")}
+                                    {renderMenuBtn("data_akun", "key", "Data Akun")}
+                                    {renderMenuBtn("siswa", "users", "Data Siswa")}
+                                    {renderMenuBtn("guru", "briefcase", "Data Guru")}
+                                    {renderMenuBtn("kelas", "layers", "Data Kelas")}
+                                    {renderMenuBtn("mapel", "book", "Data Mapel")}
+                                    {renderMenuBtn("referensi_ekskul", "activity", "Data Ekskul")}
+                                    {renderMenuBtn("mapping", "sliders", "Mapping Rapor")}
+                                    {renderMenuBtn("data_logo", "pen-tool", "Logo & TTD")}
+                                    {renderMenuBtn("data_pegon", "type", "Data Pegon Pondok")}
                                     <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Sistem</div>
-                                    <MenuBtn id="manajemen_semester" icon="folder-open" label="Manajemen Semester" />
+                                    {renderMenuBtn("manajemen_semester", "folder-open", "Manajemen Semester")}
+                                    {renderMenuBtn("backup_restore", "database", "Backup & Restore")}
                                 </>
                             )}
                             {(user?.role === 'admin' || user?.role === 'guru') && (
                                 <>
                                     <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Akademik & Rapor</div>
-                                    <MenuBtn id="input_nilai" icon="pen-tool" label="Input Nilai" />
-                                    <MenuBtn id="cetak_leger" icon="file-text" label="Cetak Leger" />
+                                    {renderMenuBtn("input_nilai", "pen-tool", "Input Nilai")}
+                                    {renderMenuBtn("cetak_leger", "file-text", "Cetak Leger")}
                                     {(user?.role === 'admin' || isWalas) && (
                                         <>
-                                            <MenuBtn id="input_absensi" icon="calendar" label="Input Absensi" />
-                                            <MenuBtn id="input_ekskul" icon="award" label="Input Nilai Ekskul" />
+                                            {renderMenuBtn("input_absensi", "calendar", "Input Absensi")}
+                                            {renderMenuBtn("input_ekskul", "award", "Input Nilai Ekskul")}
                                             <div className="mt-4 mb-2 mx-6 border-t border-slate-700"></div>
-                                            <MenuBtn id="perangkingan" icon="award" label="Peringkat Siswa" specialClass="border-amber-500 text-amber-400" />
-                                            <MenuBtn id="cetak" icon="printer" label="Cetak Rapor Sisipan" />
-                                            <MenuBtn id="cetak_pondok" icon="book-open" label="Cetak Rapor Pondok" specialClass="border-emerald-500 text-emerald-400" />
+                                            {renderMenuBtn("perangkingan", "award", "Peringkat Siswa", "border-amber-500 text-amber-400")}
+                                            {renderMenuBtn("cetak", "printer", "Cetak Rapor Sisipan")}
+                                            {renderMenuBtn("cetak_pondok", "book-open", "Cetak Rapor Pondok", "border-emerald-500 text-emerald-400")}
                                         </>
                                     )}
                                 </>
@@ -1744,12 +1832,11 @@
                             {(user?.role === 'admin' || isKepsek || isWakaAkademik || isPanitiaSumatif) && (
                                 <>
                                     <div className="px-6 text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Monitoring</div>
-                                    <MenuBtn id="monitoring" icon="bar-chart-2" label="Monitoring Nilai" />
+                                    {renderMenuBtn("monitoring", "bar-chart-2", "Monitoring Nilai")}
                                 </>
                             )}
                         </div>
                          <div className="p-4 border-t border-slate-700">
-                            {user?.role === 'admin' && (<button onClick={() => handleMenuClick('backup_restore')} className="w-full mb-3 text-slate-400 hover:text-white text-sm flex items-center gap-3 px-2 py-1 rounded hover:bg-slate-700 transition"><Icon name="database" size={16}/> Backup & Restore</button>)}
                             <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{user?.nama?.charAt(0) || 'U'}</div><div className="overflow-hidden"><p className="text-sm font-bold text-white truncate">{user?.nama || 'User'}</p><p className="text-xs text-slate-500 capitalize">{user?.role || ''}{isWalas ? ' (Walas)' : ''}</p></div></div>
                             <button onClick={() => handleLogout()} className="w-full bg-red-600/20 text-red-400 py-2 rounded text-sm hover:bg-red-600 hover:text-white transition flex items-center justify-center gap-2"><Icon name="log-out" size={16}/> Keluar</button>
                         </div>
