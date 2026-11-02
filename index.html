@@ -333,7 +333,7 @@
 
         const TugasTambahanSelector = ({ availableClasses = [], selectedTugas = [], onChange }) => {
             const currentSelected = Array.isArray(selectedTugas) ? selectedTugas : (selectedTugas && selectedTugas !== '-' ? String(selectedTugas).split(',').map(s=>s.trim()) : []);
-            const options = ['Kepala Sekolah', 'Waka Akademik', 'Panitia Sumatif', 'Koordinator Mapel IPA', 'Koordinator Mapel IPS', ...(availableClasses || []).map(k => `Wali Kelas ${k.nama}`)];
+            const options = ['Kepala Sekolah', 'Waka Akademik', 'Kesiswaan', 'Panitia Sumatif', 'Koordinator Mapel IPA', 'Koordinator Mapel IPS', ...(availableClasses || []).map(k => `Wali Kelas ${k.nama}`)];
             const handleToggle = (task) => { if (currentSelected.includes(task)) onChange(currentSelected.filter(t => t !== task)); else onChange([...currentSelected, task]); };
             return (
                 <div className="mb-4">
@@ -919,7 +919,7 @@
                             const rawNisn = row['NOMOR INDUK'] || row['Nomor Induk'] || row['nomor induk'] || row['NISN'] || row['nisn']; if (!rawNisn) return;
                             const nisnStr = String(rawNisn).trim(); const siswa = (prevData.siswa || []).find(s => String(s.nisn).trim() === nisnStr);
                             if (siswa) {
-                                let hasUpdates = false; let fieldsToImport = isKelas12 ? ['S1','S2','S3','S4','S5', ...(showSTS ? ['STS'] : []), 'SAS', ...(showPSAJ ? ['PSAJ PRAKTIK','PSAJ TULIS'] : [])] : ['S1','S2','S3','S4','S5','STS','SAS'];
+                                let hasUpdates = false; let fieldsToImport = isKelas12 ? ['S1','S2','S3','S4','S5', ...(showSTS ? ['STS'] : []), 'SAS', ...(showPSAJ ? ['PSAJ PRAKTIK','PSAJ TULIS'] : [])] : ['S1','S2','S3','S4','S5', ...(showSTS ? ['STS'] : []), 'SAS'];
                                 fieldsToImport.forEach(field => {
                                     let val = row[field] !== undefined ? row[field] : row[field.toLowerCase()];
                                     if (val !== undefined) { 
@@ -1101,7 +1101,7 @@
                 if (!primaryMatch && user?.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
                 if (!primaryMatch && user?.nama) { primaryMatch = (data.guru || []).find(g => g.nama && String(g.nama).trim().toLowerCase() === String(user.nama).trim().toLowerCase()); }
                 if (primaryMatch) { profiles = (data.guru || []).filter(g => { const hasValidNip = primaryMatch.nip && String(primaryMatch.nip).trim() !== '-' && String(primaryMatch.nip).trim() !== ''; const sameNip = hasValidNip && g.nip && String(g.nip).trim() === String(primaryMatch.nip).trim(); const hasValidName = primaryMatch.nama && String(primaryMatch.nama).trim() !== ''; const sameName = hasValidName && g.nama && String(g.nama).trim().toLowerCase() === String(primaryMatch.nama).trim().toLowerCase(); return sameNip || sameName; }); }
-                const walasClasses = new Set(); profiles.forEach(g => { const tasks = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : (g.tugasTambahan ? String(g.tugasTambahan).split(',') : []); tasks.forEach(t => { const tStr = String(t); if (tStr.toLowerCase().includes('wali kelas')) walasClasses.add(tStr.replace(/wali kelas/i, '').trim()); }); });
+                const isKesiswaan = profiles.some(g => { const tasks = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : (g.tugasTambahan ? String(g.tugasTambahan).split(',') : []); return tasks.some(t => String(t).toLowerCase().includes('kesiswaan')); }); if (isKesiswaan) return data.kelas || []; const walasClasses = new Set(); profiles.forEach(g => { const tasks = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : (g.tugasTambahan ? String(g.tugasTambahan).split(',') : []); tasks.forEach(t => { const tStr = String(t); if (tStr.toLowerCase().includes('wali kelas')) walasClasses.add(tStr.replace(/wali kelas/i, '').trim()); }); });
                 if (walasClasses.size > 0) return (data.kelas || []).filter(k => walasClasses.has(k.nama)); return []; 
             }, [data.kelas, user, data.guru]);
 
@@ -1370,9 +1370,9 @@
                 }
             }, [fbData, pendingLogin, loading]);
 
-            const { isWalas, isKepsek, isWakaAkademik, isPanitiaSumatif } = useMemo(() => {
-                let w = false, k = false, a = false, p = false;
-                if (!user || user.role !== 'guru' || !data || data._isEmpty) return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p };
+            const { isWalas, isKepsek, isWakaAkademik, isPanitiaSumatif, isKesiswaan } = useMemo(() => {
+                let w = false, k = false, a = false, p = false, ks = false;
+                if (!user || user.role !== 'guru' || !data || data._isEmpty) return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p, isKesiswaan: ks };
                 let primaryMatch = null;
                 if (user.id && String(user.id).startsWith('usr-g-')) { primaryMatch = (data.guru || []).find(g => String(g.id) === String(user.id.replace('usr-g-', ''))); }
                 if (!primaryMatch && user.nip && String(user.nip).trim() !== '' && String(user.nip).trim() !== '-') { primaryMatch = (data.guru || []).find(g => String(g.nip).trim() === String(user.nip).trim()); }
@@ -1385,9 +1385,9 @@
                         return sameNip || sameName;
                     });
                     profiles.forEach(g => {
-                        if (g.tugasTambahan) { const taskList = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : String(g.tugasTambahan).split(','); taskList.forEach(t => { const task = String(t).trim().toLowerCase(); if (task.includes('wali kelas')) w = true; if (task === 'kepala sekolah') k = true; if (task === 'waka akademik') a = true; if (task === 'panitia sumatif') p = true; }); }
+                        if (g.tugasTambahan) { const taskList = Array.isArray(g.tugasTambahan) ? g.tugasTambahan : String(g.tugasTambahan).split(','); taskList.forEach(t => { const task = String(t).trim().toLowerCase(); if (task.includes('wali kelas')) w = true; if (task === 'kepala sekolah') k = true; if (task === 'waka akademik') a = true; if (task === 'panitia sumatif') p = true; if (task.includes('kesiswaan')) ks = true; }); }
                     });
-                } return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p };
+                } return { isWalas: w, isKepsek: k, isWakaAkademik: a, isPanitiaSumatif: p, isKesiswaan: ks };
             }, [user, data]);
 
             const notify = (message, type='success') => setNotification({message, type});
@@ -1474,7 +1474,7 @@
                     case 'mapping': return <MappingRapor dataMapel={data.mapel} classList={data.kelas} setData={updateData} notify={notify} />;
                     case 'input_nilai': return user.role !== 'siswa' ? <InputNilai data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center">Akses Ditolak</div>;
                     case 'input_absensi': return (user.role === 'admin' || isWalas) ? <InputAbsensi data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
-                    case 'input_ekskul': return (user.role === 'admin' || isWalas) ? <InputEkskul data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
+                    case 'input_ekskul': return (user.role === 'admin' || isWalas || isKesiswaan) ? <InputEkskul data={data} setData={updateData} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas / Kesiswaan</div>;
                     case 'cetak_leger': return <CetakLeger data={data} notify={notify} user={user} />;
                     case 'perangkingan': return (user.role === 'admin' || isWalas) ? <Perangkingan data={data} notify={notify} user={user} /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas/Admin</div>;
                     case 'cetak': return (user.role === 'admin' || isWalas) ? <CetakRaporSelector data={data} handlePrint={handlePrint} user={user} type="akademik" /> : <div className="p-10 text-center text-red-500 font-bold">Akses Ditolak: Khusus Wali Kelas</div>;
@@ -1551,7 +1551,15 @@
                                     {(user?.role === 'admin' || isWalas) && (
                                         <>
                                             {renderMenuBtn("input_absensi", "calendar", "Input Absensi")}
+                                        </>
+                                    )}
+                                    {(user?.role === 'admin' || isWalas || isKesiswaan) && (
+                                        <>
                                             {renderMenuBtn("input_ekskul", "award", "Input Nilai Ekskul")}
+                                        </>
+                                    )}
+                                    {(user?.role === 'admin' || isWalas) && (
+                                        <>
                                             <div className="mt-4 mb-2 mx-6 border-t border-slate-700"></div>
                                             {renderMenuBtn("perangkingan", "award", "Peringkat Siswa", "border-amber-500 text-amber-400")}
                                             {renderMenuBtn("cetak", "printer", "Cetak Rapor Sisipan")}
@@ -1568,7 +1576,7 @@
                             )}
                         </div>
                          <div className="p-4 border-t border-slate-700 shrink-0">
-                            <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{user?.nama?.charAt(0) || 'U'}</div><div className="overflow-hidden"><p className="text-sm font-bold text-white truncate">{user?.nama || 'User'}</p><p className="text-xs text-slate-500 capitalize">{user?.role || ''}{isWalas ? ' (Walas)' : ''}</p></div></div>
+                            <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{user?.nama?.charAt(0) || 'U'}</div><div className="overflow-hidden"><p className="text-sm font-bold text-white truncate">{user?.nama || 'User'}</p><p className="text-xs text-slate-500 capitalize">{user?.role || ''}{isWalas ? ' (Walas)' : ''}{isKesiswaan ? ' (Kesiswaan)' : ''}</p></div></div>
                             <button onClick={() => handleLogout()} className="w-full bg-red-600/20 text-red-400 py-2 rounded text-sm hover:bg-red-600 hover:text-white transition flex items-center justify-center gap-2"><Icon name="log-out" size={16}/> Keluar</button>
                         </div>
                     </aside>
